@@ -1,0 +1,39 @@
+version: "3.9"
+
+# Local development topology for the Cloud Sync Service
+# (Deployment Guide §cloud): PostgreSQL 15, Redis 7, the gRPC service.
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: amarhisab
+      POSTGRES_PASSWORD: amarhisab
+      POSTGRES_DB: amarhisab_sync
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  sync:
+    build: .
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      DATABASE_URL: postgres://amarhisab:amarhisab@postgres:5432/amarhisab_sync?sslmode=disable
+      REDIS_ADDR: redis:6379
+      GRPC_ADDR: :9090
+      # Development only – production must supply TLS_CERT/TLS_KEY and
+      # remove INSECURE_DEV.
+      INSECURE_DEV: "true"
+    ports:
+      - "9090:9090"
+
+volumes:
+  pgdata:

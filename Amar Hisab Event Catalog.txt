@@ -1,0 +1,520 @@
+# Amar Hisab Event Catalog  
+**Document Version:** 1.0  
+**Last Updated:** 2026-07-15  
+**Audience:** Developers, System Architects, QA Engineers  
+
+---
+
+## 1. Introduction
+
+The Event Catalog defines every significant business occurrence (Domain Event) and every data mutation record (Sync Event) within the Amar Hisab system. These events decouple modules, drive asynchronous side‑effects, and form the foundation of the offline‑first synchronisation protocol. This document is the authoritative reference for event structure, producers, consumers, and payload schemas.
+
+### 1.1 Purpose
+- **Domain Events:** Enable in‑process, loosely coupled communication between modules (e.g., sending an SMS when a sale is completed, updating loyalty points).
+- **Sync Events:** Provide a durable, append‑only record of every data change, used by the sync engine to propagate state across devices and to the cloud.
+
+### 1.2 Relationship to Other Documents
+- The **Architecture Book** explains the event bus and transactional outbox patterns.
+- The **Database Book** defines the `change_log` table that stores Sync Events.
+- The **Proto Contract Book** defines the gRPC messages used to transmit Sync Events.
+
+---
+
+## 2. Event Taxonomy
+
+| Category | Scope | Persistence | Delivery Guarantee | Payload Format |
+|----------|-------|-------------|-------------------|----------------|
+| **Domain Events** | In‑process (local server) | Not persisted directly; published via in‑memory `EventBus` after DB transaction commit. | At‑most‑once (acceptable for side‑effects) | Dart objects / JSON |
+| **Sync Events** | Cross‑device, cross‑cloud | Persisted in `change_log` table atomically with business data. | At‑least‑once (idempotent via `change_id`) | JSON in `change_log.payload` |
+
+Domain Events are translated into one or more Sync Events by the `ChangeLogRecorder` (or directly written within the same transaction), ensuring that every state change is captured for synchronisation.
+
+---
+
+## 3. Domain Event Catalog
+
+### 3.1 Sales Events
+
+#### `SaleCompleted`
+**Description:** Fired after a new sale invoice is successfully saved (all payments, stock deductions, and accounting postings committed).  
+**Producer:** `SalesService`  
+**Consumers:**  
+- `NotificationService` – queues SMS/email receipt.  
+- `LoyaltyService` – updates customer loyalty points.  
+- `DashboardCache` – invalidates sales widgets.  
+- `ChangeLogRecorder` – generates corresponding Sync Events (sale INSERT, stock movements, journal entries).
+
+**Payload:**
+```json
+{
+  "eventId": "evt-123-abc",
+  "timestamp": "2026-07-15T10:30:00Z",
+  "businessId": 1,
+  "saleId": 200,
+  "invoiceNumber": "INV-2026-200",
+  "customerId": 10,
+  "grandTotal": 223.96,
+  "paidAmount": 200.00,
+  "dueAmount": 23.96,
+  "paymentStatus": "Partial",
+  "saleType": "POS"
+}
+```
+
+---
+
+#### `PaymentReceived`
+**Description:** Fired when an additional payment (due collection) is recorded against an existing sale.  
+**Producer:** `SalesService` (or `PaymentService`)  
+**Consumers:**  
+- `LoyaltyService` – may add points.  
+- `DashboardCache` – updates cash‑in‑hand / due figures.  
+- `ChangeLogRecorder` – logs payment INSERT.
+
+**Payload:**
+```json
+{
+  "eventId": "evt-456-def",
+  "timestamp": "2026-07-15T12:00:00Z",
+  "businessId": 1,
+  "saleId": 200,
+  "paymentId": 45,
+  "amount": 23.96,
+  "method": "Cash"
+}
+```
+
+---
+
+#### `SaleReturned`
+**Description:** Fired when a sales return is processed.  
+**Producer:** `SalesService`  
+**Consumers:**  
+- `InventoryService` – restocks (or marks damage).  
+- `AccountingService` – posts reversal journal.  
+- `NotificationService` – (optional) notifies customer.  
+- `ChangeLogRecorder` – generates return and stock movement Sync Events.
+
+**Payload:**
+```json
+{
+  "eventId": "evt-789-ghi",
+  "timestamp": "2026-07-15T14:00:00Z",
+  "businessId": 1,
+  "returnId": 10,
+  "returnNumber": "SR-2026-010",
+  "originalSaleId": 200,
+  "totalCredit": 50.00,
+  "restock": true
+}
+```
+
+---
+
+### 3.2 Purchase Events
+
+#### `PurchaseCompleted`
+**Description:** Fired after a purchase invoice is saved (goods received, stock added, accounting posted).  
+**Producer:** `PurchaseService`  
+**Consumers:**  
+- `InventoryService` – (stock is already updated, but could trigger alerts).  
+- `AccountingService` – posts purchase journal.  
+- `DashboardCache` – invalidates purchase widgets.  
+- `ChangeLogRecorder` – generates purchase and stock movement Sync Events.
+
+**Payload:**
+```json
+{
+  "eventId": "evt-101-jkl",
+  "timestamp": "2026-07-15T11:00:00Z",
+  "businessId": 1,
+  "purchaseId": 50,
+  "invoiceNumber": "PINV-2026-050",
+  "supplierId": 5,
+  "grandTotal": 1725.00,
+  "paidAmount": 1000.00,
+  "dueAmount": 725.00
+}
+```
+
+---
+
+#### `SupplierPaymentMade`
+**Description:** Fired when a payment is recorded to a supplier.  
+**Producer:** `PurchaseService`  
+**Consumers:**  
+- `AccountingService` – posts payment journal.  
+- `DashboardCache` – updates cash‑out / supplier due.  
+- `ChangeLogRecorder` – logs payment Sync Event.
+
+**Payload:**
+```json
+{
+  "eventId": "evt-112-mno",
+  "timestamp": "2026-07-20T09:00:00Z",
+  "businessId": 1,
+  "paymentId": 25,
+  "supplierId": 5,
+  "purchaseId": 50,
+  "amount": 500.00,
+  "method": "Bank"
+}
+```
+
+---
+
+### 3.3 Inventory Events
+
+#### `StockLow`
+**Description:** Fired when a product’s stock (or a batch) falls below the configured minimum threshold.  
+**Producer:** `InventoryService` (after any stock deduction)  
+**Consumers:**  
+- `NotificationService` – sends SMS/email alert to admin.  
+- `DashboardCache` – updates low‑stock widget.
+
+**Payload:**
+```json
+{
+  "eventId": "evt-201-pqr",
+  "timestamp": "2026-07-15T10:31:00Z",
+  "businessId": 1,
+  "productId": 105,
+  "warehouseId": 1,
+  "currentQuantity": 4,
+  "threshold": 5
+}
+```
+
+---
+
+#### `BatchExpiring`
+**Description:** Fired when a batch is within the configured warning period (e.g., 30 days before expiry). Checked daily by a scheduled job.  
+**Producer:** `InventoryService` (scheduled checker)  
+**Consumers:**  
+- `NotificationService` – alerts admin.  
+- `DashboardCache` – displays expiring medicines.
+
+**Payload:**
+```json
+{
+  "eventId": "evt-301-stu",
+  "timestamp": "2026-07-15T03:00:00Z",
+  "businessId": 1,
+  "batchId": 23,
+  "productId": 101,
+  "productName": "Napa Extra",
+  "batchNumber": "B2026-07",
+  "expiryDate": "2026-08-14",
+  "daysLeft": 30,
+  "currentQuantity": 12
+}
+```
+
+---
+
+#### `StockAdjusted`
+**Description:** Fired after a manual stock adjustment is approved and applied.  
+**Producer:** `InventoryService`  
+**Consumers:**  
+- `AccountingService` – posts adjustment journal.  
+- `ChangeLogRecorder` – generates adjustment Sync Event.
+
+**Payload:**
+```json
+{
+  "eventId": "evt-401-vwx",
+  "timestamp": "2026-07-15T16:00:00Z",
+  "businessId": 1,
+  "adjustmentId": 8,
+  "warehouseId": 1,
+  "reason": "Physical count",
+  "totalDifference": -5
+}
+```
+
+---
+
+### 3.4 Accounting Events
+
+#### `JournalPosted`
+**Description:** Fired after any journal entry (manual or auto) is successfully posted.  
+**Producer:** `AccountingService`  
+**Consumers:**  
+- `DashboardCache` – updates financial widgets.  
+- `ChangeLogRecorder` – generates journal Sync Events.
+
+**Payload:**
+```json
+{
+  "eventId": "evt-501-yza",
+  "timestamp": "2026-07-15T15:00:00Z",
+  "businessId": 1,
+  "entryId": 78,
+  "entryNumber": "JE-2026-078",
+  "isAuto": true,
+  "reference": "INV-2026-200"
+}
+```
+
+---
+
+#### `PeriodClosed`
+**Description:** Fired when an accounting period is closed. (Admin only)  
+**Producer:** `AccountingService`  
+**Consumers:**  
+- `AuditService` – logs the action.  
+- `NotificationService` – notifies owner.
+
+**Payload:**
+```json
+{
+  "eventId": "evt-601-bcd",
+  "timestamp": "2026-07-15T17:00:00Z",
+  "businessId": 1,
+  "periodStart": "2026-01-01",
+  "periodEnd": "2026-06-30"
+}
+```
+
+---
+
+### 3.5 Student / Education Events
+
+#### `StudentEnrolled`
+**Description:** Fired when a student is enrolled into a batch.  
+**Producer:** `EducationService`  
+**Consumers:**  
+- `NotificationService` – sends welcome SMS.  
+- `DashboardCache` – updates student count.  
+- `ChangeLogRecorder` – generates enrollment Sync Event.
+
+**Payload:**
+```json
+{
+  "eventId": "evt-701-efg",
+  "timestamp": "2026-07-15T09:00:00Z",
+  "businessId": 1,
+  "enrollmentId": 150,
+  "studentId": 10,
+  "studentName": "Rahim Uddin",
+  "batchId": 3,
+  "batchName": "Basic Computer Morning 2026"
+}
+```
+
+---
+
+#### `FeeInstallmentPaid`
+**Description:** Fired when a student pays a fee installment (recorded as a sale payment or enrollment payment).  
+**Producer:** `SalesService` or `EducationService`  
+**Consumers:**  
+- `StudentPortalCache` – updates portal data.  
+- `NotificationService` – sends receipt.  
+- `ChangeLogRecorder` – logs payment.
+
+**Payload:**
+```json
+{
+  "eventId": "evt-801-hij",
+  "timestamp": "2026-07-15T10:00:00Z",
+  "businessId": 1,
+  "studentId": 10,
+  "enrollmentId": 150,
+  "saleId": 200,
+  "amountPaid": 1000.00,
+  "remainingDue": 2000.00
+}
+```
+
+---
+
+#### `AttendanceMarked`
+**Description:** Fired when student attendance is recorded (daily bulk or individual).  
+**Producer:** `EducationService`  
+**Consumers:**  
+- `NotificationService` – can notify parent of absence.  
+- `DashboardCache` – updates attendance stats.  
+- `ChangeLogRecorder` – generates attendance Sync Event.
+
+**Payload:**
+```json
+{
+  "eventId": "evt-901-klm",
+  "timestamp": "2026-07-15T08:00:00Z",
+  "businessId": 1,
+  "enrollmentId": 150,
+  "date": "2026-07-15",
+  "status": "Present"
+}
+```
+
+---
+
+## 4. Sync Event Catalog
+
+Sync Events are stored as rows in the `change_log` table. They are not published to the in‑process `EventBus`; they are consumed exclusively by the **Sync Engine**.
+
+### 4.1 `change_log` Record Structure
+Each row represents a data mutation on an entity.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `change_id` | UUID (string) | Globally unique event identifier |
+| `entity_type` | string | Table/entity name, e.g., `sale`, `product`, `batch` |
+| `entity_id` | integer | Primary key of the affected row |
+| `operation` | string | `INSERT`, `UPDATE`, `DELETE` |
+| `payload` | JSON string | Full row snapshot for INSERT/UPDATE; null for DELETE |
+| `old_values` | JSON string | Previous values for UPDATE/DELETE (null for INSERT) |
+| `timestamp_ms` | integer | Epoch millisecond, device’s local clock |
+| `sequence` | integer | Monotonically increasing per device |
+| `sync_status` | string | `pending`, `synced`, `conflict` |
+| `device_id` | string | UUID of the device that originated the change |
+| `business_id` | integer | Tenant identifier |
+
+### 4.2 Entity Types & Their Sync Payloads
+
+#### `sale` (INSERT)
+Generated when a new sale is completed. The payload is the full `sales` table row as JSON, including items, payments, and batch allocations (nested).
+
+**Example Payload:**
+```json
+{
+  "id": 200,
+  "invoice_number": "INV-2026-200",
+  "customer_id": 10,
+  "sale_date": "2026-07-15",
+  "sale_type": "POS",
+  "warehouse_id": 1,
+  "total_amount": 205.0,
+  "discount_amount": 10.25,
+  "tax_amount": 29.21,
+  "grand_total": 223.96,
+  "paid_amount": 200.0,
+  "due_amount": 23.96,
+  "status": "Completed",
+  "payment_status": "Partial",
+  "items": [
+    {
+      "id": 301,
+      "product_id": 101,
+      "quantity": 2,
+      "unit_price": 50.0,
+      "line_total": 100.0,
+      "batches_used": [
+        { "batch_id": 23, "quantity": 2, "cost_price": 30.0 }
+      ]
+    }
+  ],
+  "payments": [
+    { "amount": 200.0, "method": "Cash" }
+  ]
+}
+```
+
+#### `stock_movement` (INSERT)
+Generated for every stock change (sale, purchase, transfer, adjustment, damage). Each movement is an immutable event.
+
+**Example (Sale deduction):**
+```json
+{
+  "id": 501,
+  "product_id": 101,
+  "warehouse_id": 1,
+  "batch_id": 23,
+  "movement_type": "Sale",
+  "quantity": -2,
+  "reference_type": "Sale",
+  "reference_id": 200,
+  "date": "2026-07-15",
+  "business_id": 1
+}
+```
+
+#### `journal_entry` (INSERT)
+Generated when a journal entry is posted. Payload includes the entry header and all lines.
+
+**Example:**
+```json
+{
+  "id": 78,
+  "entry_number": "JE-2026-078",
+  "entry_date": "2026-07-15",
+  "reference": "INV-2026-200",
+  "is_auto": true,
+  "lines": [
+    { "account_id": 10, "debit": 200.0, "credit": 0 },
+    { "account_id": 40, "debit": 0, "credit": 200.0 }
+  ]
+}
+```
+
+#### `batch` (INSERT / UPDATE)
+- **INSERT:** When a new batch is received (purchase).
+- **UPDATE:** When `current_quantity` changes (due to sale, return, adjustment). Payload includes only changed fields in `old_values` and the full new row in `payload`.
+
+**Example UPDATE:**
+```json
+{
+  "id": 23,
+  "current_quantity": 93,   // was 95, old_value in old_values
+  ...
+}
+```
+
+#### `product`, `customer`, `supplier`, `account`, etc.
+Standard CRUD sync events with full row snapshots.
+
+---
+
+## 5. Event Flow Diagrams (Textual)
+
+### 5.1 Sale Completion Flow
+1. `SalesService.createSale()` – within transaction:
+   - Inserts `sale`, `sale_items`, `sale_payments`.
+   - Calls `InventoryService.deductStock()` → inserts `stock_movement`s, updates `batch.current_quantity`.
+   - Calls `AccountingService.postSale()` → inserts `journal_entry` and `journal_lines`.
+   - Inserts `change_log` rows for all above entity types (transactional outbox).
+   - Commits transaction.
+2. After commit, `SalesService` publishes `SaleCompleted` domain event to `EventBus`.
+3. In‑process subscribers react (notifications, loyalty).
+4. Sync Engine (background) picks up `change_log` rows with `sync_status = 'pending'` and pushes to cloud.
+
+### 5.2 Sync Pull Flow (Remote Change Applied)
+1. Local server pulls `ChangeEvent` stream from cloud.
+2. For each event:
+   - Checks `change_id` deduplication.
+   - Applies the change to local DB (INSERT/UPDATE/DELETE).
+   - If conflict, resolves (last‑write‑wins) and stores original in `audit_log`.
+3. After all events applied, updates `sync_state.last_remote_sequence`.
+4. No domain events are fired for remotely applied changes (to avoid infinite loops). However, if a remotely applied change triggers a local business rule (e.g., stock goes low), that rule is evaluated locally and may fire its own domain event.
+
+---
+
+## 6. Event Versioning
+
+- Domain Events carry a `version` field (optional, defaults to 1). When a payload changes, the version is incremented. Subscribers can handle multiple versions.
+- Sync Events include the `schema_version` of the entity in the payload. When deserializing, the local server applies any registered upcasters to transform older versions to the latest schema before applying to the database. This allows different devices running different software versions to sync safely.
+
+---
+
+## 7. Appendix: Event Quick Reference
+
+| Domain Event | Key Attributes | Sync Events Generated |
+|-------------|----------------|------------------------|
+| SaleCompleted | saleId, invoiceNumber, total | sale:INSERT, stock_movement:INSERT (multiple), journal_entry:INSERT |
+| PaymentReceived | saleId, amount, method | sale_payment:INSERT, sale:UPDATE (paid_amount) |
+| SaleReturned | returnId, originalSaleId, credit | sales_return:INSERT, sale:UPDATE (status), stock_movement:INSERT (if restock) |
+| PurchaseCompleted | purchaseId, supplierId, total | purchase:INSERT, stock_movement:INSERT, journal_entry:INSERT |
+| SupplierPaymentMade | paymentId, amount | supplier_payment:INSERT, purchase:UPDATE (paid_amount) |
+| StockLow | productId, currentQuantity | (no sync event; purely local alert) |
+| BatchExpiring | batchId, daysLeft | (no sync event; local alert) |
+| StockAdjusted | adjustmentId, difference | stock_movement:INSERT (adjustment) |
+| JournalPosted | entryId, isAuto | journal_entry:INSERT |
+| PeriodClosed | periodStart, periodEnd | (no sync event; local action) |
+| StudentEnrolled | enrollmentId, batchId | student_enrollment:INSERT |
+| FeeInstallmentPaid | studentId, amountPaid | sale_payment:INSERT, sale:UPDATE (if linked to a sale) |
+| AttendanceMarked | enrollmentId, date, status | student_attendance:INSERT |
+
+---
+
+*This Event Catalog is the definitive reference for all system events. For integration details, refer to the **Architecture Book** and the **Proto Contract Book**.*

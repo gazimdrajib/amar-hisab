@@ -1,0 +1,264 @@
+# Amar Hisab Operations Runbook  
+**Document Version:** 1.0  
+**Last Updated:** 2026-07-15  
+**Audience:** System Administrators, IT Support, Shop Owners  
+
+---
+
+## 1. Introduction
+
+This runbook provides step‑by‑step instructions for the day‑to‑day operation, maintenance, and troubleshooting of Amar Hisab – the offline‑first business management platform. It is designed for the non‑technical shop owner or appointed administrator. Following these procedures will keep the system healthy, data safe, and downtime to a minimum.
+
+### 1.1 How to Use This Runbook
+- **Daily tasks** (startup, sales, backup) are marked with 🟢  
+- **Weekly tasks** (report review, disk check) are marked with 🟡  
+- **Monthly/Quarterly tasks** (archival, user review) are marked with 🔵  
+- **Emergency tasks** (restore, crash recovery) are marked with 🔴  
+
+All actions are performed on the **Local Server** (the desktop/laptop where Amar Hisab is installed) unless otherwise noted.
+
+### 1.2 System Components
+- **Local Server:** The computer running Amar Hisab Desktop (Windows, macOS, or Linux). It hosts the database and the local API.  
+- **Client Devices:** Smartphones, tablets, or other computers that connect to the server via Wi‑Fi to run the POS or management interface.  
+- **Peripherals:** Thermal printer, barcode scanner, cash drawer (connected to the server or client devices).  
+- **Optional Cloud Services:** Amar Hisab Cloud Sync, Google Drive, Telegram (for backup and sync).
+
+---
+
+## 2. System Startup and Shutdown
+
+### 🟢 2.1 Starting the System
+1. **Power on the Local Server computer** and log in (if required).  
+2. **Launch Amar Hisab** by double‑clicking the desktop icon or searching in the Start Menu / Applications.  
+3. If the database is encrypted, enter the passphrase when prompted.  
+4. The app will start. Click **Settings → Local Server → Start Server**.  
+5. Wait for the status to change to “Server running on port 8080”.  
+6. **On client devices:**  
+   - Open the Amar Hisab app.  
+   - The device should auto‑discover the server (`amarhisab.local`). Tap **Connect**.  
+   - If auto‑discovery fails, enter the server’s IP address (e.g., `192.168.0.105`) and port `8080`, then tap **Connect**.  
+7. **Test peripherals:** Print a test receipt (Settings → Printer Setup → Test Print), scan a test barcode, and open the cash drawer (if applicable).  
+8. The system is now ready for business.
+
+### 🟢 2.2 Stopping the System (End of Day)
+1. Ensure all active sales are completed and no pending transactions remain on any client.  
+2. **On the Local Server:**  
+   - Click **Settings → Local Server → Stop Server**.  
+   - Wait for the server to stop.  
+   - Close the Amar Hisab application (File → Exit or close window).  
+3. Shut down the computer normally (Start → Shut Down).  
+
+**Important:** Do not forcibly power off the computer while Amar Hisab is running. Always stop the server and close the app first to prevent database corruption.
+
+---
+
+## 3. Daily Operations
+
+### 🟢 3.1 Performing a Sale (POS)
+1. On a client device, open Amar Hisab and select **Sales → POS Sale**.  
+2. Scan the product’s barcode or search by name.  
+3. Adjust quantities or apply discounts if permitted.  
+4. (Optional) Assign a customer by entering their mobile number.  
+5. Tap **Pay Now**.  
+6. Select payment method(s) – Cash, bKash, Card, etc. – and enter the amount. Multiple methods can be combined.  
+7. Tap **Confirm Payment**. The receipt will print automatically.  
+8. The sale is saved; stock and accounting are updated instantly.
+
+**If the internet is down:** POS works exactly the same. Digital payments (bKash) that require internet will fail; use Cash or Credit instead. You can record the digital payment later when internet returns via **Sales → Receive Payment**.
+
+### 🟢 3.2 Recording a Purchase / Stock Arrival
+1. Go to **Purchase → New Purchase**.  
+2. Select the supplier and the receiving warehouse.  
+3. Add products: scan or search, enter quantity, cost price, and for batch‑tracked items the batch number and expiry date.  
+4. If payment is made now, enter the paid amount and method. Otherwise, leave as credit.  
+5. Tap **Save**. Stock quantities increase immediately, and accounting is updated.
+
+### 🟢 3.3 Daily Cash Count & Reconciliation
+1. At the end of the day, go to **Accounting → Cash Book**.  
+2. Select today’s date. The system shows all cash‑in (sales) and cash‑out (expenses, purchases).  
+3. Count the physical cash in the drawer.  
+4. If there is a discrepancy, check the list of transactions for any missing entries. Use **Sales → Sales History** to verify.  
+5. **Do not edit or delete transactions**; if a mistake is found, process a correction (e.g., Sales Return for an over‑charge, or a manual journal entry for a miscount – consult your accountant).
+
+---
+
+## 4. Backup and Restore
+
+### 🟢 4.1 Manual Backup (Daily)
+Amar Hisab can backup to USB drive, Google Drive, or Telegram.  
+1. Insert a USB drive or ensure internet is available.  
+2. Go to **Settings → Backup**.  
+3. Choose destination:  
+   - **Local File:** saves a `.zip` file to a folder you select.  
+   - **Google Drive:** uploads encrypted backup to your Google account (requires Google login).  
+   - **Telegram:** sends the file to your Telegram “Saved Messages” via the Amar Hisab bot.  
+4. Click **Backup Now**. A progress bar will appear.  
+5. Verify the backup file exists and is not zero bytes. For Google Drive/Telegram, check that the file appears in the cloud.  
+
+**Best practice:** Take a manual backup at the end of each business day before shutting down.
+
+### 🟡 4.2 Scheduled Automatic Backup
+1. Go to **Settings → Backup → Auto Backup**.  
+2. Enable **Enable Scheduled Backup**.  
+3. Choose destination (Google Drive recommended).  
+4. Set a time (e.g., 03:00 AM – the computer must be on at that time; for shops that shut down, use manual backup instead).  
+5. The system will automatically backup daily at the scheduled time if the computer is running.
+
+### 🔴 4.3 Restoring from Backup (Emergency)
+Use this procedure if the database is corrupted, accidentally deleted, or after replacing the computer.
+
+1. **Stop the Amar Hisab server** (if running) and close the app.  
+2. **Locate the backup file:**  
+   - If on USB, insert it.  
+   - If on Google Drive, download the `.zip` file to the computer.  
+   - If on Telegram, download from your chat.  
+3. **Launch Amar Hisab.** On the login screen, select **Restore Backup**.  
+4. Choose the source (Local file, Google Drive, Telegram) and select the backup file.  
+5. If the backup is encrypted, enter the passphrase.  
+6. The restore process will replace the current database. Click **Restore**.  
+7. After completion, the app will restart. Log in and verify that your data (products, recent sales, cash balance) is correct.  
+8. Re‑enable any cloud sync if previously configured.
+
+**⚠️ Caution:** Restoring a backup overwrites all current data. Only do this when necessary and after confirming the backup is recent.
+
+---
+
+## 5. Monitoring & Health Checks
+
+### 🟡 5.1 Weekly System Health Check
+1. On the Local Server, go to **Settings → Help → System Health**.  
+2. Review the status indicators:  
+   - **Database:** should show “Healthy” and an integrity check passed.  
+   - **Disk Space:** ensure at least 5 GB free.  
+   - **Sync:** if using cloud sync, check “Online” and no large pending queue.  
+   - **Backup:** ensure the last successful backup was within the last 2 days.  
+3. If any indicator is yellow or red, follow the troubleshooting section below.
+
+### 🟡 5.2 Checking Logs
+1. Go to **Settings → Help → View Logs**.  
+2. The last 1000 log entries are shown. Look for lines with `WARN` or `ERROR`.  
+3. Common warnings (e.g., “Printer offline”) can be ignored if the printer was intentionally off. Repeated errors should be reported to support.
+
+---
+
+## 6. Troubleshooting Common Issues
+
+### 🔴 6.1 Server Does Not Start
+- **Symptom:** “Failed to start server” message, or clients cannot connect.  
+- **Solution:**  
+  1. Check if another application is using port 8080. Change the port in Settings → Local Server → Port (e.g., 8081).  
+  2. Ensure the firewall is not blocking Amar Hisab. On Windows, allow “Amar Hisab” through the firewall when prompted.  
+  3. Restart the computer and try again.
+
+### 🔴 6.2 Client Cannot Connect to Server
+- **Symptom:** “Server not found” on client devices.  
+- **Solution:**  
+  1. Verify that both the server and client are on the same Wi‑Fi network.  
+  2. On the server, check the IP address (Settings → Local Server shows it).  
+  3. On the client, tap **Enter Manually** and type the server IP and port (e.g., `192.168.0.105:8080`).  
+  4. If using mDNS (`amarhisab.local`), ensure the router does not block multicast traffic. Try the manual IP method.
+
+### 🔴 6.3 Printer Not Printing
+- **Symptom:** Receipt does not print, or “Printer Offline” message.  
+- **Solution:**  
+  1. Check physical connections (USB/Bluetooth).  
+  2. Go to Settings → Printer Setup → select the printer and click **Test Print**.  
+  3. If Bluetooth, re‑pair the printer from the computer’s Bluetooth settings.  
+  4. Ensure the correct printer type (58mm/80mm) and paper width are set in Printer Setup.  
+  5. Restart the printer and the Amar Hisab server.
+
+### 🔴 6.4 Database Corruption Detected
+- **Symptom:** On startup, a message “Database integrity check failed”.  
+- **Solution:**  
+  1. Do **not** try to open the database manually.  
+  2. Restore from the most recent backup (see Section 4.3).  
+  3. If no backup exists, contact Amar Hisab support immediately – do not continue using the system.
+
+### 🔴 6.5 Cloud Sync Not Working
+- **Symptom:** Sync status shows “Offline” for a long period despite internet being available.  
+- **Solution:**  
+  1. Check internet connectivity by opening a website on the server.  
+  2. Go to Settings → Cloud Sync → **Reconnect**.  
+  3. Verify your subscription is active and the cloud account credentials are correct.  
+  4. Restart the local server.
+
+---
+
+## 7. User and Role Management
+
+### 🔵 7.1 Adding a New User
+1. Go to **Settings → Users**.  
+2. Click **Add User**.  
+3. Enter username, full name, and a temporary password.  
+4. Select the role (Owner, Admin, Manager, Cashier, Accountant).  
+5. Click **Save**.  
+6. The new user can now log in from any client device with the temporary password; they will be asked to change it on first login.
+
+### 🔵 7.2 Changing a User’s Role
+1. Go to Settings → Users.  
+2. Find the user and click **Edit**.  
+3. Change the role and save.  
+4. The user must log out and log back in for the new permissions to take effect.
+
+### 🔵 7.3 Disabling or Removing a User
+- **Disable:** Edit the user and set “Active” to **No**. The user cannot log in, but their history is preserved.  
+- **Remove:** Only possible if the user has made no transactions. Otherwise, always disable.
+
+---
+
+## 8. Business Type and Configuration
+
+### 🔵 8.1 Changing Business Type (Advanced)
+⚠️ This changes the available modules, chart of accounts, and dashboard. Back up your database first!
+
+1. Go to **Settings → Business Profile**.  
+2. Click **Change Business Type**.  
+3. Select the new type from the list (e.g., from Grocery to Pharmacy).  
+4. Review the preview of changes: which modules will be added/removed.  
+5. Confirm and follow the migration wizard.  
+6. The system will restart. Verify that products, accounts, and reports are correct.
+
+### 🟡 8.2 Configuring Tax Rates
+1. Go to **Settings → Tax Setup**.  
+2. Add a new tax (e.g., VAT 15%).  
+3. Set the default tax for sales and purchases.  
+4. The tax will automatically apply to new invoices.
+
+---
+
+## 9. Software Updates
+
+### 🟡 9.1 Updating the Local Server
+1. When a new version is available, Amar Hisab will display a notification.  
+2. Click **Download Update**.  
+3. Once downloaded, close the application and run the installer.  
+4. The installer will upgrade Amar Hisab without affecting your data.  
+5. After installation, restart the server.  
+6. **Client devices** will automatically prompt for update when they connect (or update via app store).
+
+**Important:** Always backup before updating.
+
+### 🔵 9.2 Checking the Current Version
+- Go to **Settings → About**. The version number is displayed there.
+
+---
+
+## 10. Security Best Practices
+
+- **Server Room:** Keep the server computer in a locked room or area.  
+- **Passwords:** Change the default admin password immediately after installation. Use strong passwords for all users.  
+- **Wi‑Fi:** Use WPA2 or WPA3 encryption on your router. Do not broadcast the SSID if possible.  
+- **USB Drives:** Scan any USB drive for viruses before connecting to the server.  
+- **Cloud Sync:** Only enable cloud sync if you trust the cloud provider and need multi‑branch features.  
+- **Remote Support:** Only enable temporary remote log streaming when instructed by official Amar Hisab support. Never share your password.
+
+---
+
+## 11. Emergency Contacts and Support
+
+- **Amar Hisab Support:** [support@amarhisab.com](mailto:support@amarhisab.com) or call the number on your invoice.  
+- **Local IT Contact:** If you have a local IT person, keep their number handy for hardware issues.
+
+---
+
+*This Operations Runbook is a living document. For the latest version, check the Help menu within Amar Hisab or download from the official website.*

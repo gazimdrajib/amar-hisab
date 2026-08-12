@@ -1,0 +1,67 @@
+# Kubernetes manifests for the Cloud Sync Service (ADR-012).
+# Expects an existing PostgreSQL (managed or in-cluster) and Redis.
+# Secrets (nebula.example.com) must hold: DATABASE_URL, REDIS_ADDR,
+# tls.crt / tls.key for the gRPC listener.
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: amarhisab-sync
+  namespace: amarhisab
+type: Opaque
+stringData:
+  DATABASE_URL: "postgres://user:pass@postgres:5432/amarhisab_sync?sslmode=require"
+  REDIS_ADDR: "redis:6379"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sync
+  namespace: amarhisab
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: sync }
+  template:
+    metadata:
+      labels: { app: sync }
+    spec:
+      containers:
+        - name: sync
+          image: ghcr.io/amarhisab/sync:latest
+          env:
+            - name: GRPC_ADDR
+              value: ":9090"
+            - name: DATABASE_URL
+              valueFrom: { secretKeyRef: { name: amarhisab-sync, key: DATABASE_URL } }
+            - name: REDIS_ADDR
+              valueFrom: { secretKeyRef: { name: amarhisab-sync, key: REDIS_ADDR } }
+            - name: TLS_CERT
+              value: /etc/tls/tls.crt
+            - name: TLS_KEY
+              value: /etc/tls/tls.key
+          ports:
+            - { containerPort: 9090, name: grpc }
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls
+              readOnly: true
+          readinessProbe:
+            grpc: { port: 9090 }
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { cpu: 500m, memory: 256Mi }
+      volumes:
+        - name: tls
+          secret:
+            secretName: amarhisab-sync-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sync
+  namespace: amarhisab
+spec:
+  selector: { app: sync }
+  ports:
+    - { port: 443, targetPort: grpc, name: grpc }

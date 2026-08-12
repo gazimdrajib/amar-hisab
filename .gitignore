@@ -1,0 +1,23 @@
+# Dart / build
+.dart_tool/
+.packages
+build/
+pubspec.lock
+
+# Code generation outputs are committed only if the team chooses to.
+# Uncomment the next two lines to exclude them:
+# **/*.g.dart
+# **/*.freezed.dart
+
+# Environment & secrets
+.env
+
+# Local database files
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# OS
+Thumbs.db
+.DS_Store

@@ -1,0 +1,292 @@
+# Amar Hisab Production Deployment Guide  
+**Document Version:** 1.0  
+**Last Updated:** 2026-07-15  
+**Audience:** IT Administrators, System Integrators, Onboarding Team  
+
+---
+
+## 1. Introduction
+
+This guide provides a complete walk‑through for deploying Amar Hisab in a production environment. It covers the installation and configuration of the Local Server (desktop), client devices, peripherals, network setup, optional cloud sync, and backup strategy. After following this guide, the system will be fully operational for day‑to‑day business use.
+
+### 1.1 Scope
+- **Local Server** installation on Windows, macOS, or Linux.
+- **Client devices** (Android, iOS, additional desktops) connection.
+- **Hardware peripherals** (thermal receipt printer, barcode scanner, cash drawer).
+- **Network** configuration for reliable local communication.
+- **Security** hardening for production.
+- **Verification** that all core functions work correctly.
+
+### 1.2 Assumptions
+- You have already selected the hardware that meets the [minimum requirements](#151-local-server-hardware-requirements).
+- A Wi‑Fi router (or wired LAN) is available for the local network.
+- The person performing the installation has basic computer literacy (installing software, connecting USB devices).
+
+---
+
+## 2. Pre‑Deployment Checklist
+
+Before installing Amar Hisab, verify the following:
+
+| Item | Requirement |
+|------|-------------|
+| **Server Computer** | Windows 10/11 (64‑bit), macOS 11+, or Ubuntu 20.04+; at least 4 GB RAM, 10 GB free disk space. |
+| **Network** | Wi‑Fi router with WPA2/WPA3 security, or Ethernet switch. Server and clients must be on the same subnet. |
+| **Static IP (recommended)** | Assign a fixed IP address to the server computer via the router’s DHCP reservation. This ensures clients can always find the server even if mDNS fails. |
+| **Internet (optional)** | Required only for cloud sync, Google Drive backup, Telegram backup, SMS, and software updates. The system works fully offline. |
+| **Printer** | ESC/POS‑compatible thermal printer (58mm or 80mm). USB, Bluetooth, or network models supported. |
+| **Barcode Scanner** | USB HID (keyboard emulation) or Bluetooth SPP scanner. |
+| **Cash Drawer** | Standard cash drawer that connects to the printer’s RJ11 port. |
+
+---
+
+## 3. Local Server Installation
+
+### 3.1 Download the Installer
+1. Go to [https://amarhisab.com/download](https://amarhisab.com/download) (or the official distribution page).
+2. Download the appropriate installer:
+   - **Windows:** `AmarHisab-Setup-x64.exe`
+   - **macOS:** `AmarHisab-Installer.dmg`
+   - **Linux:** `amarhisab_amd64.deb` (Debian/Ubuntu) or `.AppImage` (universal)
+
+### 3.2 Install on Windows
+1. Double‑click the `.exe` file. If SmartScreen warns, click “More info” → “Run anyway”.
+2. Follow the installation wizard (accept default path `C:\Program Files\AmarHisab`).
+3. Check “Launch Amar Hisab” at the end and click Finish.
+
+### 3.3 Install on macOS
+1. Open the `.dmg` file.
+2. Drag the Amar Hisab app into the Applications folder.
+3. Right‑click the app and select “Open” to bypass Gatekeeper on first launch.
+4. If prompted, confirm that you want to open it.
+
+### 3.4 Install on Linux
+- **Debian/Ubuntu:**  
+  `sudo dpkg -i amarhisab_amd64.deb`  
+  Then launch from the applications menu or run `amarhisab` in terminal.
+- **AppImage:**  
+  `chmod +x AmarHisab-*.AppImage && ./AmarHisab-*.AppImage`
+
+---
+
+## 4. Initial Setup Wizard
+
+On first launch, the application will guide you through a setup wizard.
+
+1. **Select Language** – Choose **বাংলা** or **English**. This will be the default UI language.
+2. **Create or Restore?** – Select **Create New Business** (unless restoring from a backup).
+3. **Business Type** – Choose the type that best describes your business:  
+   - Pharmacy  
+   - Grocery / Super Shop  
+   - Academy / Training Center  
+   - Clothing Store  
+   - Hardware Store  
+   - etc.  
+   *This selection will enable the correct modules, chart of accounts, and dashboard.*
+4. **Business Details** – Enter your shop name, address, and contact number.
+5. **Currency & Tax** – The default currency is **BDT (৳)**. Set the default tax rate (e.g., 15% VAT) if applicable.
+6. **Admin Account** – Create the **Owner** account. Choose a strong username and password. This account has full privileges.
+7. **Start Server** – The wizard will automatically start the local server on port 8080.
+
+After the wizard completes, you will see the main dashboard.
+
+---
+
+## 5. Network Configuration
+
+For client devices to connect reliably, configure the server’s network:
+
+### 5.1 Find the Server IP Address
+- Go to **Settings → Local Server**. The screen displays the server’s IP address (e.g., `192.168.0.105`) and the mDNS hostname (`amarhisab.local`).
+
+### 5.2 Set a Static IP (Recommended)
+1. Access your router’s admin page (usually `192.168.0.1` or `192.168.1.1`).
+2. Find **DHCP Reservation** or **Address Reservation**.
+3. Select the server computer from the list of connected devices and reserve its current IP.
+4. Save and reboot the router if necessary. The server will now always have the same IP.
+
+### 5.3 Firewall Configuration
+- **Windows:** The installer automatically adds a firewall rule allowing inbound TCP on port 8080 from local subnet. Verify in **Windows Defender Firewall → Advanced Settings → Inbound Rules → “Amar Hisab Server”**.
+- **macOS:** On first launch, you were prompted to allow incoming connections. If missed, go to **System Settings → Network → Firewall → Options** and ensure “Amar Hisab” is allowed.
+- **Linux:** If `ufw` is enabled, run:  
+  `sudo ufw allow from 192.168.0.0/24 to any port 8080 proto tcp`  
+  (adjust subnet to your LAN).
+
+### 5.4 Verify Local Network Discovery
+- On another device connected to the same Wi‑Fi, open a browser and go to `http://amarhisab.local:8080/api/health`. You should see a JSON response `{"status":"healthy"}`. If not, use `http://<server-ip>:8080/api/health` to test IP reachability. If the IP works but hostname doesn’t, mDNS may be blocked by the router – proceed with manual IP entry on clients.
+
+---
+
+## 6. Peripheral Setup
+
+### 6.1 Thermal Receipt Printer
+1. Connect the printer to the server (USB) or pair via Bluetooth.
+2. In Amar Hisab, go to **Settings → Printer Setup**.
+3. Click **Add Printer**. The system will auto‑detect connected printers.
+4. Select your printer model and set:
+   - **Paper width:** 58 mm or 80 mm.
+   - **Type:** Receipt.
+   - **Default for receipts:** Yes.
+5. Click **Test Print**. A test receipt should print.
+6. If the printer supports cash drawer kick‑out, enable **Cash Drawer** and select the pin (usually Pin 2).
+
+### 6.2 Barcode Scanner
+- **USB Scanner:** Plug it in. It works as a keyboard emulator; open Notepad or any text field in Amar Hisab, scan a barcode, and the number appears. No special setup is needed.
+- **Bluetooth Scanner:** Pair with the server via system Bluetooth settings. Then in Amar Hisab, go to **Settings → Scanner Setup** and select the paired device.
+
+### 6.3 Cash Drawer
+- Connect the drawer’s RJ11 cable to the receipt printer’s cash drawer port.
+- In **Settings → Printer Setup**, for the receipt printer, enable **Cash Drawer** and test by clicking **Open Drawer**. The drawer should pop open when a cash sale is completed.
+
+---
+
+## 7. Client Device Connection
+
+Install Amar Hisab on employee smartphones/tablets (Android/iOS) or additional desktops.
+
+### 7.1 Mobile Client (Android/iOS)
+1. Download **Amar Hisab** from Google Play Store or Apple App Store.
+2. Open the app. It will scan the local network for the server.
+3. If the server is found (`amarhisab.local`), tap **Connect**.
+4. If not found, tap **Enter Server Manually** → input the server IP and port (e.g., `192.168.0.105:8080`). Tap **Connect**.
+5. Log in with the user credentials created earlier.
+
+### 7.2 Additional Desktop Client
+- The same Amar Hisab desktop installer can be used as a client.
+- After installation, on the login screen, select **Connect to Remote Server** instead of starting a local server.
+- Enter the server IP/port and log in.
+
+### 7.3 Testing
+- Perform a test sale from a client device. The receipt should print (if printer is configured) and the transaction appear on the server’s sales history.
+
+---
+
+## 8. Cloud Sync Setup (Optional)
+
+Cloud Sync enables multi‑branch synchronisation and cloud backup. It requires an active internet connection and an Amar Hisab Cloud account.
+
+1. On the Local Server, go to **Settings → Cloud Sync**.
+2. Click **Create Account** or **Sign In** if you already have one.
+3. Fill in the email and password; verify via OTP.
+4. After logging in, click **Link This Device**.
+5. The server will perform an initial sync (upload existing data). This may take several minutes depending on database size.
+6. To add another branch/device, repeat the process on that device using the same cloud account. Data will merge.
+
+**Important:** Cloud Sync is optional. The system remains fully functional without it. Data is encrypted (AES‑256) before leaving the local network.
+
+---
+
+## 9. Backup Configuration
+
+Data loss can be catastrophic. Configure automated backups.
+
+1. **Local USB Backup:**  
+   - Insert a USB drive that will be dedicated to backups.  
+   - Go to **Settings → Backup → Local File**.  
+   - Select the USB drive folder as destination.  
+   - Click **Backup Now** to test.  
+   - Enable **Scheduled Backup** at a time when the computer is on (e.g., 11 PM) and set destination to that USB drive.
+
+2. **Google Drive Backup:**  
+   - In Backup settings, choose **Google Drive**.  
+   - Sign in with your Google account and grant permissions.  
+   - Test the backup and enable scheduling.
+
+3. **Telegram Backup:**  
+   - In Backup settings, choose **Telegram**.  
+   - Follow the instructions to connect your Telegram account and receive the backup file in your Saved Messages.  
+   - Useful for off‑site backup without a cloud subscription.
+
+**At minimum, have one off‑site backup (Google Drive or Telegram) to protect against fire/theft.**
+
+---
+
+## 10. Security Hardening
+
+Before handing the system over to daily operations, apply these security measures:
+
+1. **Change Default Passwords:** The Owner account password set during setup should be strong. Create separate accounts for each staff member with the appropriate role (Manager, Cashier, etc.).
+2. **Enable Database Encryption (if sensitive data):**  
+   - Go to **Settings → Security → Database Encryption**.  
+   - Set a strong passphrase. The database file will be encrypted at rest.  
+   - **Note:** You will need this passphrase every time the server starts.
+3. **Disable Unused Services:** If you don’t use cloud sync, ensure it remains unlinked.
+4. **Wi‑Fi Security:** Use WPA2‑Personal or WPA3 encryption with a strong password. Hide the SSID if needed.
+5. **Physical Security:** Keep the server in a locked room or cabinet. Restrict USB port access.
+6. **Audit Log Retention:** Go to **Settings → Security → Audit Log** and set retention to at least 1 year.
+
+---
+
+## 11. Post‑Deployment Validation
+
+Perform the following end‑to‑end checks to confirm everything is working:
+
+| # | Test Case | Expected Result |
+|---|-----------|-----------------|
+| 1 | Create a new product (with barcode, batch, expiry) | Product appears in inventory with correct details |
+| 2 | Perform a cash sale from a client device | Receipt prints, stock decreases, sale appears in sales history, cash balance increases |
+| 3 | Perform a digital payment sale (bKash) if online | Payment recorded, due amount zero |
+| 4 | Create a purchase invoice with batch tracking | Stock increases, batch appears with correct expiry, supplier due updates |
+| 5 | Stock Transfer between warehouses | Source warehouse stock decreases, destination increases |
+| 6 | Manual backup (USB and Google Drive) | Backup file created, able to download and verify integrity |
+| 7 | Restore backup (test with a dummy backup) | Database replaced correctly, data intact |
+| 8 | Create a student enrollment (if Academy type) and generate QR | QR works, student portal shows correct info |
+| 9 | Cloud sync (if enabled) between two devices | Changes made on one device appear on the other after sync |
+
+---
+
+## 12. Multi‑Branch Deployment (Optional)
+
+For businesses with multiple physical locations:
+
+1. Install a Local Server at **each** branch following this guide.
+2. On each server, enable **Cloud Sync** and log in with the **same** cloud account.
+3. The branches will start syncing inventories and sales data.  
+   - **Note:** Local operations remain independent; sync is eventual.
+4. The Owner can view consolidated reports from any branch by connecting to the cloud web dashboard (if subscribed) or by pulling data via the sync service to a central server.
+
+---
+
+## 13. Upgrading from a Previous Version
+
+- **Desktop:** The updater downloads the new version; the installer performs an in‑place upgrade. The database schema is automatically migrated.
+- **Mobile:** Update via app store. Ensure the server is updated first, as a newer client may not be compatible with an older server (a warning will appear).
+- Always perform a full backup before any major version upgrade.
+
+---
+
+## 14. Troubleshooting Deployment Issues
+
+| Problem | Likely Cause | Solution |
+|---------|--------------|----------|
+| Server fails to start | Port 8080 already in use | Change port in Settings → Local Server |
+| Clients can’t discover server | mDNS blocked by router | Use static IP and manually enter on clients |
+| Printer not printing | Wrong printer driver / loose cable | Run Test Print; re‑pair Bluetooth; check paper |
+| Scanner not inputting barcodes | USB scanner not in HID mode | Check scanner manual; scan the “USB HID” configuration barcode |
+| Backup to Google Drive fails | Internet outage or expired token | Re‑authenticate Google account in Backup settings |
+| Cloud sync stuck | Sync token expired | Sign out and sign back in to Cloud Sync |
+
+For further issues, consult the **Operations Runbook** or contact support.
+
+---
+
+## 15. Reference
+
+### 15.1 Local Server Hardware Requirements (Detailed)
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| **CPU** | 2 cores, 2.0 GHz (x86‑64 or ARM64) | 4 cores, 3.0 GHz |
+| **RAM** | 4 GB | 8 GB |
+| **Storage** | 10 GB free (SSD preferred) | 20 GB free |
+| **OS** | Windows 10, macOS 11, Ubuntu 20.04 | Latest stable |
+| **Network** | Ethernet or Wi‑Fi (802.11n or better) | Ethernet for stability |
+
+### 15.2 Supported Peripherals (Tested)
+- **Printers:** XPrinter XP‑58, XP‑80; Rongta RP80; EPSON TM‑T20, TM‑T88; Any ESC/POS compatible.
+- **Barcode Scanners:** Zebra DS2208, Honeywell 1900, any USB HID keyboard‑emulating scanner.
+- **Cash Drawers:** APG, Star, generic models with RJ11 interface.
+
+---
+
+*This guide is part of the Amar Hisab documentation suite. For detailed architecture, see the **Architecture Book**; for daily operations, see the **Operations Runbook**.*

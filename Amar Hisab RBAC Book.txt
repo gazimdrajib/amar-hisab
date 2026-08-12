@@ -1,0 +1,345 @@
+# Amar Hisab RBAC Book  
+**Document Version:** 1.0  
+**Last Updated:** 2026-07-15  
+**Audience:** System Administrators, Security Auditors, Developers  
+
+---
+
+## 1. Introduction
+
+Role‑Based Access Control (RBAC) is the cornerstone of Amar Hisab’s security model. Every user, whether the business owner or a part‑time cashier, operates within a precisely defined set of permissions that govern what they can see and do. This book defines the roles, the permission taxonomy, the enforcement points, and the administrative procedures that ensure the principle of least privilege is maintained across the entire system.
+
+### 1.1 Purpose
+- Define all system‑defined roles and their intended responsibilities.
+- Provide a complete permission matrix mapping roles to allowed actions on each resource.
+- Explain how RBAC is enforced in the API, service layer, and UI.
+- Guide administrators in creating, modifying, and auditing user access.
+
+### 1.2 Scope
+- Local server RBAC (the same model applies to the optional cloud sync service, though the cloud itself is managed by the Amar Hisab team).
+- Role and permission definitions; custom roles (Enterprise feature) are noted but not fully detailed.
+- Integration with the `users`, `roles`, and `permissions` tables documented in the **Database Book**.
+
+---
+
+## 2. Core Concepts
+
+### 2.1 User
+A human (or, in future, a service account) that authenticates with a username and password. Each user is assigned exactly one **role** per business (in multi‑business setups, a user can have different roles in different businesses, but the local server serves one active business at a time).
+
+### 2.2 Role
+A named collection of **permissions**. Amar Hisab pre‑defines several roles that reflect real‑world job functions. The role determines the upper bound of what a user can do; additional business rules may further restrict actions (e.g., a cashier can apply a maximum 10% discount).
+
+### 2.3 Resource
+A business entity or functional area that can be acted upon. Examples: `sale`, `product`, `customer`, `report`, `settings`. Resources are organised hierarchically (e.g., `sale` includes `sale_item` and `sale_payment`).
+
+### 2.4 Action
+An operation that can be performed on a resource. The system uses a standard set of actions:
+
+| Action | Description |
+|--------|-------------|
+| `create` | Create a new record (e.g., a sale, a product). |
+| `read`   | View a record or list of records. |
+| `update` | Modify an existing record. |
+| `delete` | Soft‑delete or deactivate a record. |
+| `approve` | Authorise an action that requires a higher level of trust (e.g., large discount, stock adjustment approval). |
+| `export` | Download data in an external format (Excel, PDF). |
+| `manage` | Special action for administrative tasks (user management, system settings). |
+
+Not all resources support all actions; for example, `sale` does not have an `approve` action in the standard model.
+
+### 2.5 Permission
+A tuple of `(resource, action)`. The permission `sale:create` means the user is allowed to create a sale. Permissions are stored in the `permissions` table and associated with roles.
+
+---
+
+## 3. System‑Defined Roles
+
+Amar Hisab ships with the following roles. They are immutable in the sense that their core permission sets cannot be reduced below a safe minimum; however, an **Owner** can further restrict some actions via custom role configuration (Enterprise feature).
+
+### 3.1 Owner
+- **Intended for:** The business proprietor or most senior manager.
+- **Capabilities:** Full, unrestricted access to every resource and action in the system, including user management, system settings, backup/restore, and closing accounting periods.
+- **Restrictions:** None. The Owner can perform any action. The Owner account is created during initial setup and cannot be deleted or demoted by other users.
+
+### 3.2 Admin
+- **Intended for:** A trusted manager responsible for day‑to‑day operations but who should not have ultimate control over the business configuration or user accounts.
+- **Capabilities:** Can create and manage sales, purchases, inventory, customers, suppliers, and view all reports. Can create and manage non‑Owner users (except assigning Owner role). Can configure printers, tax rates, and other operational settings. Cannot close accounting periods, change business type, or modify the chart of accounts system accounts.
+
+### 3.3 Manager
+- **Intended for:** A floor supervisor who oversees sales and inventory but does not handle accounting or sensitive settings.
+- **Capabilities:** Similar to Admin for sales, purchase, inventory, and customers. Can view reports but not export them. Can approve discounts and returns up to a configurable limit. Cannot manage users, view profit & loss or balance sheet, or change settings.
+
+### 3.4 Cashier
+- **Intended for:** Front‑line staff who process sales and accept payments.
+- **Capabilities:** Create POS sales (with product lookup, customer assignment), view limited product information (selling price, not cost), process payments, print receipts. Can view own sales history for the current shift. Cannot apply discounts beyond a default limit, view cost prices, access inventory or accounting screens, or view any reports.
+
+### 3.5 Accountant
+- **Intended for:** A bookkeeper or external accountant who needs full access to financial data but not operational transactions.
+- **Capabilities:** View and manage chart of accounts, create manual journal entries, view trial balance, profit & loss, balance sheet, and all accounting reports. Can export financial data. Cannot create or modify sales, purchases, or inventory.
+
+### 3.6 Inventory Manager
+- **Intended for:** A stock‑focused role responsible for receiving goods, managing stock levels, and handling transfers.
+- **Capabilities:** Manage products (add, update, deactivate), manage batches, stock transfers, stock adjustments, and damage entries. View inventory reports and low‑stock alerts. Cannot access sales, purchases, or financial data.
+
+### 3.7 Teacher (Education Module)
+- **Intended for:** Instructors in an academy.
+- **Capabilities:** View assigned academic batches, mark student attendance, enter exam marks. Cannot view fee details, financial reports, or modify enrollments.
+
+### 3.8 Student / Customer (External – Public Portal)
+- **Intended for:** Self‑service users who access their own data via QR code or portal.
+- **Capabilities:** Read‑only access to their own profile, fee/payment history, attendance, and exam results. No access to any backend system or other students’ data.
+
+---
+
+## 4. Permission Matrix
+
+The following matrix maps the system‑defined roles to their permissions. A `✔` indicates the permission is granted by default. Actions marked with `‑` are not applicable to that resource.
+
+### 4.1 Sales & Payments
+
+| Resource / Action | Owner | Admin | Manager | Cashier | Accountant |
+|-------------------|-------|-------|---------|---------|------------|
+| `sale:create` | ✔ | ✔ | ✔ | ✔ | – |
+| `sale:read` | ✔ | ✔ | ✔ | ✔ (own) | – |
+| `sale:update` | ✔ | ✔ | ✔ | ✔ (own, limited) | – |
+| `sale:delete` | ✔ | ✔ | – | – | – |
+| `sale:return` | ✔ | ✔ | ✔ | – | – |
+| `sale:approve_discount` | ✔ | ✔ | ✔ (up to %) | – | – |
+| `payment:create` | ✔ | ✔ | ✔ | ✔ | – |
+| `payment:read` | ✔ | ✔ | ✔ | ✔ (own) | – |
+| `quotation:create` | ✔ | ✔ | ✔ | – | – |
+| `quotation:read` | ✔ | ✔ | ✔ | – | – |
+
+### 4.2 Purchase & Suppliers
+
+| Resource / Action | Owner | Admin | Manager | Accountant |
+|-------------------|-------|-------|---------|------------|
+| `purchase:create` | ✔ | ✔ | ✔ | – |
+| `purchase:read` | ✔ | ✔ | ✔ | ✔ |
+| `purchase:update` | ✔ | ✔ | – | – |
+| `purchase:delete` | ✔ | ✔ | – | – |
+| `purchase:return` | ✔ | ✔ | ✔ | – |
+| `purchase_order:create` | ✔ | ✔ | ✔ | – |
+| `supplier:create` | ✔ | ✔ | ✔ | – |
+| `supplier:read` | ✔ | ✔ | ✔ | ✔ |
+| `supplier:update` | ✔ | ✔ | ✔ | – |
+| `supplier_payment:create` | ✔ | ✔ | – | – |
+
+### 4.3 Products & Inventory
+
+| Resource / Action | Owner | Admin | Manager | Inventory Mgr | Cashier |
+|-------------------|-------|-------|---------|---------------|---------|
+| `product:create` | ✔ | ✔ | ✔ | ✔ | – |
+| `product:read` | ✔ | ✔ | ✔ | ✔ | ✔ (name, price) |
+| `product:update` | ✔ | ✔ | ✔ | ✔ | – |
+| `product:delete` | ✔ | ✔ | – | ✔ | – |
+| `batch:read` | ✔ | ✔ | ✔ | ✔ | – |
+| `batch:update` | ✔ | ✔ | ✔ | ✔ | – |
+| `inventory:read` | ✔ | ✔ | ✔ | ✔ | – |
+| `inventory:transfer` | ✔ | ✔ | ✔ | ✔ | – |
+| `inventory:adjust` | ✔ | ✔ | – | ✔ | – |
+| `inventory:damage` | ✔ | ✔ | ✔ | ✔ | – |
+
+### 4.4 Accounting
+
+| Resource / Action | Owner | Admin | Accountant | Manager |
+|-------------------|-------|-------|------------|---------|
+| `account:create` | ✔ | – | ✔ | – |
+| `account:read` | ✔ | ✔ | ✔ | – |
+| `account:update` | ✔ | – | ✔ | – |
+| `journal:create` | ✔ | ✔ | ✔ | – |
+| `journal:read` | ✔ | ✔ | ✔ | – |
+| `trial_balance:read` | ✔ | ✔ | ✔ | – |
+| `profit_loss:read` | ✔ | ✔ | ✔ | – |
+| `balance_sheet:read` | ✔ | ✔ | ✔ | – |
+| `period:close` | ✔ | – | – | – |
+
+### 4.5 Customers & CRM
+
+| Resource / Action | Owner | Admin | Manager | Cashier |
+|-------------------|-------|-------|---------|---------|
+| `customer:create` | ✔ | ✔ | ✔ | ✔ |
+| `customer:read` | ✔ | ✔ | ✔ | ✔ |
+| `customer:update` | ✔ | ✔ | ✔ | – |
+| `customer:delete` | ✔ | ✔ | – | – |
+| `customer:export` | ✔ | ✔ | ✔ | – |
+
+### 4.6 Reports & Analytics
+
+| Resource / Action | Owner | Admin | Manager | Accountant |
+|-------------------|-------|-------|---------|------------|
+| `report:sales` | ✔ | ✔ | ✔ | ✔ |
+| `report:purchases` | ✔ | ✔ | ✔ | ✔ |
+| `report:inventory` | ✔ | ✔ | ✔ | ✔ |
+| `report:financial` | ✔ | ✔ | – | ✔ |
+| `report:export` | ✔ | ✔ | – | ✔ |
+
+### 4.7 Administration & Settings
+
+| Resource / Action | Owner | Admin |
+|-------------------|-------|-------|
+| `user:create` | ✔ | ✔ (non‑Owner) |
+| `user:read` | ✔ | ✔ |
+| `user:update` | ✔ | ✔ (non‑Owner) |
+| `user:delete` | ✔ | – |
+| `role:assign` | ✔ | – |
+| `settings:update` | ✔ | ✔ (operational only) |
+| `business:change_type` | ✔ | – |
+| `backup:create` | ✔ | ✔ |
+| `backup:restore` | ✔ | ✔ |
+| `audit_log:read` | ✔ | ✔ |
+
+### 4.8 Education (Academy)
+
+| Resource / Action | Owner | Admin | Teacher |
+|-------------------|-------|-------|---------|
+| `batch:create` | ✔ | ✔ | – |
+| `batch:read` | ✔ | ✔ | ✔ (assigned) |
+| `enrollment:create` | ✔ | ✔ | – |
+| `enrollment:read` | ✔ | ✔ | ✔ (own batch) |
+| `attendance:create` | ✔ | ✔ | ✔ (own batch) |
+| `attendance:read` | ✔ | ✔ | ✔ |
+| `exam:create` | ✔ | ✔ | ✔ (own subject) |
+| `exam:read` | ✔ | ✔ | ✔ |
+| `student:read` (full) | ✔ | ✔ | – |
+
+---
+
+## 5. Enforcement Architecture
+
+RBAC is enforced at multiple layers to provide defence in depth.
+
+### 5.1 API Middleware
+Every HTTP request to the internal REST API passes through an `AuthorizationMiddleware`. The middleware:
+
+1. Extracts and validates the JWT from the `Authorization` header.
+2. Retrieves the user’s `role_id` and `business_id` from the token.
+3. Identifies the required permission for the requested endpoint (e.g., `sale:create` for `POST /api/v1/sales`). The mapping of endpoints to permissions is declarative and stored in a configuration file or code annotations.
+4. Checks the `permissions` table (cached in memory) to verify that the role possesses the required permission.
+5. If the permission is granted, the request proceeds to the controller. If denied, a `403 Forbidden` response is returned immediately.
+
+### 5.2 Service‑Layer Checks
+For fine‑grained business rules that cannot be expressed simply as resource‑action pairs, the service layer performs additional checks. Examples:
+- A `Cashier` can apply a discount, but `DiscountService` checks the user’s role and enforces a maximum percentage (e.g., 10%). If exceeded, the operation is blocked even though the `sale:approve_discount` permission is technically present (the cashier has a restricted form of that permission).
+- A `Manager` can approve a return, but only up to a certain value; larger returns require an `Admin` or `Owner`.
+
+These rules are implemented in the service classes and are documented in the source code.
+
+### 5.3 UI Rendering
+The Flutter client receives the user’s permission list upon login (from `GET /api/v1/auth/me`). The UI dynamically:
+- Hides sidebar menu items for which the user lacks `read` permission.
+- Disables or hides buttons (e.g., “Delete Product”, “Export Excel”) for which the user lacks the required action.
+- This is a **UX optimisation only**; the server remains the authoritative enforcer. A malicious user modifying the client cannot bypass server‑side checks.
+
+### 5.4 Audit Trail
+All actions that are governed by RBAC are recorded in the `audit_log` table, which includes the `user_id` of the actor. This allows a security auditor to review who performed which action and verify that permissions were correctly applied.
+
+---
+
+## 6. Role Administration
+
+### 6.1 Creating Users and Assigning Roles
+1. **Prerequisite:** The logged‑in user must have the `user:create` permission (Owner or Admin).
+2. Navigate to **Settings → Users**.
+3. Click **Add User**. Fill in username, full name, and a temporary password.
+4. Select a **Role** from the dropdown. The dropdown lists all available roles. Admin cannot select “Owner” for a new user; that option is greyed out unless the current user is an Owner.
+5. Save. The new user can now log in with the temporary password and will be forced to change it.
+
+### 6.2 Changing a User’s Role
+- Owners can change the role of any user, including other Owners (except the initial Owner account, which is protected).
+- Admins can change roles of non‑Owner users to any role except Owner.
+- The change takes effect immediately after the user’s next API request (the cached permission set is invalidated).
+
+### 6.3 Disabling or Deleting a User
+- **Disable:** Set the user’s `is_active` flag to `false` (Edit User → uncheck “Active”). The user cannot log in, but their transaction history remains and is auditable.
+- **Delete:** Only possible if the user has zero transactions. In practice, users should always be **disabled** rather than deleted, to preserve audit integrity.
+
+### 6.4 Custom Roles (Enterprise Feature)
+In the Enterprise edition, an Owner can create custom roles with a subset of permissions. The UI provides a matrix view where individual permissions can be toggled. Custom roles are stored in the same `roles` and `permissions` tables, with `is_custom = 1`. They can be assigned to users like any pre‑defined role.
+
+---
+
+## 7. Security Considerations
+
+- **Least Privilege:** Always assign the lowest role that allows the user to perform their job. For example, if a staff member only processes sales, assign **Cashier**, not **Manager**.
+- **Shared Accounts are Prohibited:** Each human user must have their own account. Shared accounts destroy accountability and audit trails.
+- **Temporary Elevated Access:** If a Cashier needs to perform a Manager action temporarily (e.g., cover for an absent manager), the proper approach is to temporarily change their role (and change it back afterwards) rather than sharing a manager password. The role change is audited.
+- **API Tokens & Security:** JWTs are short‑lived (8 hours). If a device is lost, the admin can disable the user account, immediately revoking access. There is no long‑lived API key that bypasses RBAC; all external access (including the sync service) uses device‑specific certificates, not user roles.
+
+---
+
+## 8. Appendix: Permission Quick Reference
+
+A compact list of all permissions used by the system.
+
+| Permission String | Resource | Action |
+|------------------|----------|--------|
+| `sale:create` | Sales | Create |
+| `sale:read` | Sales | Read |
+| `sale:update` | Sales | Update |
+| `sale:delete` | Sales | Delete |
+| `sale:return` | Sales | Return |
+| `sale:approve_discount` | Sales | Approve |
+| `payment:create` | Payments | Create |
+| `payment:read` | Payments | Read |
+| `quotation:create` | Quotations | Create |
+| `quotation:read` | Quotations | Read |
+| `purchase:create` | Purchase | Create |
+| `purchase:read` | Purchase | Read |
+| `purchase:update` | Purchase | Update |
+| `purchase:delete` | Purchase | Delete |
+| `purchase:return` | Purchase | Return |
+| `purchase_order:create` | Purchase Orders | Create |
+| `supplier:create` | Suppliers | Create |
+| `supplier:read` | Suppliers | Read |
+| `supplier:update` | Suppliers | Update |
+| `supplier_payment:create` | Supplier Payments | Create |
+| `product:create` | Products | Create |
+| `product:read` | Products | Read |
+| `product:update` | Products | Update |
+| `product:delete` | Products | Delete |
+| `batch:read` | Batches | Read |
+| `batch:update` | Batches | Update |
+| `inventory:read` | Inventory | Read |
+| `inventory:transfer` | Inventory | Transfer |
+| `inventory:adjust` | Inventory | Adjust |
+| `inventory:damage` | Inventory | Damage |
+| `account:create` | Chart of Accounts | Create |
+| `account:read` | Chart of Accounts | Read |
+| `account:update` | Chart of Accounts | Update |
+| `journal:create` | Journal | Create |
+| `journal:read` | Journal | Read |
+| `trial_balance:read` | Trial Balance | Read |
+| `profit_loss:read` | Profit & Loss | Read |
+| `balance_sheet:read` | Balance Sheet | Read |
+| `period:close` | Period | Close |
+| `customer:create` | Customers | Create |
+| `customer:read` | Customers | Read |
+| `customer:update` | Customers | Update |
+| `customer:delete` | Customers | Delete |
+| `customer:export` | Customers | Export |
+| `report:sales` | Sales Report | Read |
+| `report:purchases` | Purchase Report | Read |
+| `report:inventory` | Inventory Report | Read |
+| `report:financial` | Financial Report | Read |
+| `report:export` | Export | Export |
+| `user:create` | Users | Create |
+| `user:read` | Users | Read |
+| `user:update` | Users | Update |
+| `user:delete` | Users | Delete |
+| `role:assign` | Roles | Assign |
+| `settings:update` | Settings | Update |
+| `business:change_type` | Business | Change Type |
+| `backup:create` | Backup | Create |
+| `backup:restore` | Backup | Restore |
+| `audit_log:read` | Audit Log | Read |
+| `batch:create` (Education) | Academic Batch | Create |
+| `enrollment:create` | Enrollment | Create |
+| `attendance:create` | Attendance | Create |
+| `exam:create` | Exam | Create |
+| `student:read` | Student | Read |
+
+---
+
+*This RBAC Book defines the access control framework for Amar Hisab. For implementation details on authentication and token management, refer to the **Architecture Book**. For schema details, see the **Database Book**.*

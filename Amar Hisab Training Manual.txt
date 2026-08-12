@@ -1,0 +1,279 @@
+# Amar Hisab Training Manual  
+**Document Version:** 1.0  
+**Last Updated:** 2026-07-15  
+**Audience:** End‑Users (Shop Owners, Cashiers, Managers, Accountants, Academy Administrators)  
+
+---
+
+## 1. Welcome to Amar Hisab
+
+Amar Hisab (আমার হিসাব) is an all‑in‑one business management platform that replaces your paper ledger, calculator, and multiple apps. It works entirely offline, so you never need the internet to run your shop. This manual will teach you everything you need to know – from installing the system to generating your balance sheet.  
+
+**How to Use This Manual**  
+- Each section is a self‑contained lesson. Start with **Getting Started** and then jump to the sections that match your role.  
+- Icons indicate the type of task:  
+  🟢 Daily operations  
+  🔵 Setup & configuration (do once)  
+  🟡 Periodic tasks (weekly/monthly)  
+- If you see a Bengali word in brackets, it is the local term for the feature.
+
+---
+
+## 2. Getting Started
+
+### 🔵 Installing Amar Hisab (for the Owner/Admin)
+1. Download the installer from **amarhisab.com/download**.  
+2. Run the file and follow the on‑screen instructions.  
+3. On first launch, the **Setup Wizard** will appear.  
+   - Choose your language (বাংলা / English).  
+   - Select your **Business Type** (e.g., Pharmacy, Grocery, Academy). This automatically sets up the correct modules and accounts.  
+   - Enter your business name, address, and contact.  
+   - Create the **Owner** account (your master login).  
+4. When the wizard finishes, you will see the Dashboard. The local server is now running.
+
+### 🔵 Connecting Client Devices (Cashier’s mobile, tablet, second computer)
+1. On the other device, install Amar Hisab from the app store or website.  
+2. Connect the device to the **same Wi‑Fi network** as the server computer.  
+3. Open the app. It should automatically find the server – tap **Connect**.  
+   - If it doesn’t, enter the server’s IP address manually (you can find it in **Settings → Local Server**).  
+4. Log in with the username and password given to you by the admin.
+
+### 🔵 Setting Up Printers and Scanners
+- **Thermal Printer:** Plug the printer into the server (USB) or pair via Bluetooth. Go to **Settings → Printer Setup → Add Printer** and select your model. Click **Test Print** to verify.  
+- **Barcode Scanner:** For USB scanners, just plug it in – it works like a keyboard. Open any text field, scan a barcode, and the number appears.  
+- **Cash Drawer:** Connect it to the printer’s cash drawer port. It will open automatically when you complete a cash sale.
+
+---
+
+## 3. Daily Sales (POS)
+
+### 🟢 Making a Sale (কাস্টমারকে বিক্রি)
+1. On the client device, tap **Sales → POS Sale**.  
+2. **Add products:**  
+   - Scan the barcode with the scanner, or  
+   - Type the product name in the search bar.  
+3. Adjust the quantity if needed using the **+ / –** buttons.  
+4. (Optional) Add a customer by typing their mobile number. If it’s a regular customer, their details and loyalty points will appear.  
+5. To give a discount, tap the **Discount** field and enter a percentage or amount.  
+6. Tap **Pay Now**.  
+7. **Payment Screen:**  
+   - Select the payment method (Cash, bKash, Card, etc.).  
+   - You can split the payment across multiple methods.  
+   - Enter the amount received. If the customer pays the full amount, the Due becomes zero.  
+8. Tap **Confirm Payment**. The receipt prints automatically, and the sale is saved.
+
+**💡 Tips:**  
+- If the customer is not paying the full amount, the remaining becomes **due (বাকি)**. You can collect it later using **Receive Payment**.  
+- If you make a mistake, you can void the entire sale by tapping the three‑dot menu on the sale in the history, but only if you have the permission.
+
+### 🟢 Collecting a Due Payment (বাকি আদায়)
+1. Go to **Sales → Sales History**.  
+2. Find the sale with a due amount.  
+3. Tap the sale to open it, then tap **Receive Payment**.  
+4. Enter the amount, method, and date. Save.  
+5. The customer’s due balance reduces automatically.
+
+### 🟢 Handling a Customer Return
+1. Go to **Sales → Sales History** and find the original sale.  
+2. Tap the sale, then tap **Return**.  
+3. Select the items being returned and the quantity.  
+4. Choose whether the item goes back to stock (**Restock**) or is damaged.  
+5. Select how you will refund the customer (cash, credit).  
+6. Tap **Process Return**. The stock will be adjusted and accounting will be reversed.
+
+---
+
+## 4. Purchase & Stock (ক্রয় ও মজুদ)
+
+### 🟢 Receiving a New Purchase (মাল আসা)
+1. Go to **Purchase → New Purchase**.  
+2. Select the **Supplier** and the **Warehouse** where the goods are arriving.  
+3. Add the products one by one:  
+   - Scan or search for the product.  
+   - Enter the quantity, the cost price per unit, and for batch‑tracked items (like medicines), enter the **Batch Number** and **Expiry Date**.  
+4. If you are paying the supplier now, enter the amount and payment method. If it’s on credit, leave `Paid Amount` as zero – the system will record the due.  
+5. Tap **Save**. The stock increases immediately.
+
+### 🟢 Checking Current Stock (মজুদ দেখা)
+- Go to **Inventory → Current Stock**.  
+- You can filter by warehouse, category, or search by product name.  
+- Items that are **low stock** or **expiring soon** will be highlighted in yellow/red.
+
+### 🟢 Transferring Stock Between Branches
+1. Go to **Inventory → Stock Transfer**.  
+2. Choose the **From** warehouse and **To** warehouse.  
+3. Add the products and quantities to transfer.  
+4. Tap **Transfer Stock**. The stock in the source decreases, and the destination increases.
+
+### 🟢 Adjusting Stock (Physical Count Mismatch)
+If you count your physical stock and it doesn’t match what Amar Hisab shows:
+1. Go to **Inventory → Stock Adjustment**.  
+2. Select the warehouse and add the products that have a difference.  
+3. Enter the **Current Qty** (what the system thinks) and the **New Qty** (what you actually counted).  
+4. Provide a reason (e.g., “Physical count correction”).  
+5. Save. The system will adjust the stock and record the difference in accounting.
+
+---
+
+## 5. Accounting & Reports (হিসাব ও রিপোর্ট)
+
+### 🔵 Understanding the Chart of Accounts (হিসাবের খাতা)
+Amar Hisab uses double‑entry accounting. Don’t worry – it’s automatic! The **Chart of Accounts** is a list of all the financial accounts (like “Cash in Hand”, “Sales Revenue”, “Rent Expense”). The system already created these for you based on your business type.
+
+### 🟢 Viewing Daily Cash
+- Go to **Accounting → Cash Book**.  
+- Select today’s date to see all cash‑in (sales) and cash‑out (expenses).  
+- Compare this with the physical cash in your drawer.
+
+### 🟢 Recording an Expense (খরচ)
+1. Go to **Accounting → Expense** (or use the quick button on the dashboard).  
+2. Select the expense category (Rent, Electricity, etc.).  
+3. Enter the amount, date, and payment method.  
+4. Save. The cash balance decreases and the expense is recorded in the Profit & Loss.
+
+### 🟡 Monthly Financial Reports
+- **Profit & Loss:** Go to **Reports → Profit & Loss**, choose the month. You will see your total income, total expenses, and net profit.  
+- **Balance Sheet:** Shows what your business owns (assets) and owes (liabilities) at a specific date.  
+- **Trial Balance:** A summary of all account balances; it helps spot any accounting errors.
+
+### 🟡 Exporting Reports to Excel
+On any report screen, tap the **Export** button and choose **Excel**. The file will be saved to your device. You can then print it or share it.
+
+---
+
+## 6. Managing Customers & Suppliers
+
+### 🟢 Adding a Customer (ক্রেতা যোগ)
+1. Go to **Customers → Add Customer**.  
+2. Enter the name, mobile number, and optional details.  
+3. If this customer gets a special discount, set the discount percent.  
+4. Save. The customer will now appear when you search during a sale.
+
+### 🟢 Viewing Customer Ledger (ক্রেতার হিসাব)
+- Search for a customer and tap their name.  
+- You will see all their past sales, payments, and current due.  
+- Use this screen to remind them of outstanding dues.
+
+### 🔵 Setting Up Loyalty Points
+- In **Settings → Loyalty**, you can define how many points per taka spent.  
+- The system automatically adds points after each sale.  
+- You can also allow redemption of points as discount.
+
+### 🟢 Supplier Payments
+- Go to **Suppliers**, select the supplier.  
+- You will see the list of unpaid purchase invoices.  
+- Tap **Make Payment**, enter the amount and method, and save. The supplier’s due balance updates.
+
+---
+
+## 7. Pharmacy Module (ঔষধ ব্যবসা)
+
+### 🔵 Setting Up Medicine Database
+- Go to **Pharmacy → Medicines**.  
+- You can import a standard medicine list or add manually.  
+- For each medicine, fill in the **Generic Name**, **Strength**, **Dosage Form**, and **Schedule** (if it’s a controlled drug).
+
+### 🟢 Sale with Prescription
+- During a POS sale, if you select a schedule‑H medicine, the system will prompt for the doctor’s name and prescription reference. This helps you stay compliant.
+
+### 🟢 Checking Expiry
+- The Dashboard shows **Expiring Medicines** within the configured alert period (e.g., 30 days).  
+- You can also run the **Expiry Report** from the Reports menu.
+
+---
+
+## 8. Academy / Education Module (কম্পিউটার একাডেমি)
+
+### 🔵 Creating a Batch
+1. Go to **Education → Batches → New Batch**.  
+2. Select the **Course** (which you must have added as a **Service** product first).  
+3. Name the batch (e.g., “Basic Computer Morning”), set the start/end dates, max students, and instructor.  
+
+### 🟢 Enrolling a Student
+1. Go to **Customers** and create the student as a customer (or use an existing one).  
+2. Then go to **Education → Enroll Student**.  
+3. Search the student, select the batch, and set the enrollment date.  
+4. The system can automatically create a fee invoice (Full payment or Installments).
+
+### 🟢 Recording Attendance
+1. On a teacher’s device, open **Education → Attendance**.  
+2. Select the batch and date.  
+3. Mark each student as Present, Absent, or Late.  
+4. Save. The attendance percentage updates for each student.
+
+### 🟢 Student Self‑Service (QR Portal)
+- Print the **Public QR Code** from **Settings → Portal** and display it at the academy gate.  
+- Students scan it with their phone, select their Student ID, enter the secret password (given by the academy), and can see their fee due, attendance, and exam results – all without installing any app.
+
+---
+
+## 9. Backup & Restore (ব্যাকআপ ও পুনরুদ্ধার)
+
+### 🟢 Taking a Manual Backup
+1. Insert a USB drive into the server computer.  
+2. Go to **Settings → Backup**.  
+3. Choose **Local File**, navigate to your USB drive, and tap **Backup Now**.  
+4. Wait for the confirmation. Store the USB in a safe place.
+
+### 🔵 Setting Up Auto Backup (Google Drive)
+1. In Backup settings, select **Google Drive**.  
+2. Sign in with your Google account.  
+3. Enable **Scheduled Backup** and set a time (e.g., 11 PM). The system will automatically upload an encrypted backup every night.
+
+### 🔴 Restoring from Backup
+1. If you ever need to restore, close Amar Hisab.  
+2. Reopen the app and on the login screen, select **Restore Backup**.  
+3. Choose the backup source and file. Enter the passphrase if encrypted.  
+4. The system will replace the database and restart. Verify your data is intact.
+
+---
+
+## 10. Multi‑User & Roles (একাধিক ব্যবহারকারী)
+
+### 🔵 Adding a User
+1. As an Owner/Admin, go to **Settings → Users**.  
+2. Tap **Add User**, fill in the details, and assign a role:  
+   - **Cashier** – can only sell.  
+   - **Manager** – can sell, manage stock, and view reports.  
+   - **Accountant** – can access financial records but not sales.  
+3. Give the temporary password to the user. They must change it on first login.
+
+### 🟢 Switching User
+- On the login screen, simply log in with your own credentials. Each user has their own session.
+
+---
+
+## 11. Troubleshooting (সমস্যা সমাধান)
+
+**The printer is not printing**  
+- Check the USB/Bluetooth connection. Go to Settings → Printer Setup → Test Print. If that works, restart the client app.
+
+**Client can’t find the server**  
+- Ensure both devices are on the same Wi‑Fi. On the client, tap “Enter Server Manually” and type the server’s IP address (shown in the server’s Local Server screen).
+
+**Forgotten admin password**  
+- On the server computer, go to the login screen, click **Forgot Password**. This will send a reset code to the Owner’s registered email (if cloud is configured). Otherwise, you may need to restore from a backup and then recreate the user.
+
+**Database error on startup**  
+- The system will automatically check the database. If corrupted, it will prompt you to restore from backup. If you don’t have a backup, contact support immediately.
+
+---
+
+## 12. Glossary (পরিভাষা)
+
+| English Term | বাংলা পরিভাষা | Meaning |
+|--------------|----------------|---------|
+| Sale | বিক্রয় | Selling a product to a customer |
+| Purchase | ক্রয় | Buying goods from a supplier |
+| Inventory / Stock | মজুদ / স্টক | The quantity of products you have |
+| Customer | ক্রেতা | Buyer |
+| Supplier | সরবরাহকারী | Wholesaler / vendor |
+| Invoice | চালান / রশিদ | Bill of sale |
+| Due / Outstanding | বাকি | Money still owed |
+| Profit & Loss | লাভ ও ক্ষতি | Income minus expenses |
+| Balance Sheet | আর্থিক অবস্থা বিবরণী | Statement of assets, liabilities, and equity |
+| Backup | ব্যাকআপ | Safe copy of your data |
+
+---
+
+*This manual covers the core operations of Amar Hisab. For advanced features (custom reports, API integration, enterprise deployment), please refer to the Administration Guide or contact our support team.*

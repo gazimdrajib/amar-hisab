@@ -1,0 +1,857 @@
+# Amar Hisab Proto Contract Book  
+**Document Version:** 1.0  
+**Last Updated:** 2026-07-15  
+**Audience:** API Consumers (Frontend Developers, Third‑Party Integrators), Backend Developers, QA Engineers  
+
+---
+
+## 1. Introduction
+
+The Proto Contract Book defines every external interface of the Amar Hisab system. It is the single source of truth for:
+
+- **REST API** – consumed by the Flutter clients, the Public Portal, and potentially third‑party integrations.  
+- **gRPC Sync Service** – used between the Local Server and the optional Cloud Sync Service.  
+- **Public Portal Endpoints** – accessed by students, parents, and customers via QR codes.  
+
+All contracts are versioned and governed by strict backward‑compatibility rules. The book is intended to be used alongside the Architecture Book and Database Book.
+
+### 1.1 Document Structure
+- **Section 2** – REST API conventions (status codes, pagination, authentication).  
+- **Section 3** – REST API endpoint reference, organised by module.  
+- **Section 4** – gRPC sync service contracts (.proto definitions).  
+- **Section 5** – Shared data types and enums.  
+- **Section 6** – Versioning and deprecation policy.
+
+---
+
+## 2. REST API Conventions
+
+All REST endpoints share a common set of behaviours.
+
+### 2.1 Base URL
+- **Local Network:** `http://{server-ip}:8080` or `http://amarhisab.local:8080`
+- **Cloud (future public API):** `https://api.amarhisab.com`
+
+### 2.2 Content Type
+- `application/json` for both request and response bodies.
+
+### 2.3 Authentication
+- **Internal API:**  
+  Header `Authorization: Bearer <JWT>` required for all endpoints except `/auth/login`.  
+  The JWT must be obtained from `/api/v1/auth/login` and contains `user_id`, `role`, `business_id`.
+- **Public Portal API:**  
+  No global auth; uses portal tokens (embedded in QR URL) or student ID + secret for login.
+
+### 2.4 HTTP Methods
+- `GET` – Retrieve resource(s)  
+- `POST` – Create a new resource  
+- `PUT` – Full update (idempotent)  
+- `PATCH` – Partial update  
+- `DELETE` – Soft‑delete / deactivate
+
+### 2.5 Status Codes
+| Code | Meaning |
+|------|---------|
+| 200 OK | Request succeeded (GET, PUT, PATCH) |
+| 201 Created | Resource created; `Location` header points to new resource |
+| 204 No Content | Successful DELETE or operation with no body |
+| 400 Bad Request | Invalid input; see `error` object |
+| 401 Unauthorized | Missing or invalid token |
+| 403 Forbidden | Insufficient permissions |
+| 404 Not Found | Resource does not exist |
+| 409 Conflict | Business rule violation (e.g., duplicate invoice) |
+| 422 Unprocessable Entity | Semantic validation error (e.g., unbalanced journal) |
+| 429 Too Many Requests | Rate limiting |
+| 500 Internal Server Error | Unexpected server failure |
+
+### 2.6 Response Envelope
+Every JSON response follows this structure:
+
+**Success:**
+```json
+{
+  "success": true,
+  "data": { ... },
+  "meta": { ... }        // optional, for pagination
+}
+```
+
+**Error:**
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INSUFFICIENT_STOCK",
+    "message": "Insufficient stock for product Napa Extra.",
+    "details": { ... }
+  }
+}
+```
+
+### 2.7 Pagination
+Collection endpoints support cursor‑based pagination via query parameters:
+- `limit` (default 20, max 100)
+- `cursor` (opaque string from previous `meta.next_cursor`)
+
+The `meta` object in the response:
+```json
+{
+  "next_cursor": "eyJpZCI6MTIzfQ==",
+  "has_more": true,
+  "total_count": 250
+}
+```
+If `has_more` is `false`, all items have been fetched.
+
+### 2.8 Filtering & Sorting
+Standard query parameters for collections:
+- `?status=Completed,Draft` – filter by field (comma‑separated)
+- `?from_date=2026-07-01&to_date=2026-07-15` – date range
+- `?customer_id=42` – foreign key filter
+- `?sort=-created_at` – sort by field; `-` indicates descending
+
+### 2.9 API Versioning
+The API version is embedded in the URL path: `/api/v1/`, `/api/v2/`.  
+The version number changes only on backwards‑incompatible modifications. Additions (new endpoints, new optional fields) do **not** change the version. The server may support multiple versions simultaneously during a deprecation window.
+
+---
+
+## 3. REST API Endpoint Reference
+
+### 3.1 Authentication
+
+#### `POST /api/v1/auth/login`
+Authenticate a local user and obtain a JWT.
+
+**Request Body:**
+```json
+{
+  "username": "admin",
+  "password": "secret"
+}
+```
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "user": {
+      "id": 1,
+      "username": "admin",
+      "full_name": "Rahim",
+      "role": "Owner"
+    }
+  }
+}
+```
+**Error 401:** Invalid credentials.
+
+#### `GET /api/v1/auth/me`
+Returns the profile and permissions of the currently authenticated user.
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "username": "admin",
+    "role": "Owner",
+    "permissions": ["sale:create", "sale:read", ...]
+  }
+}
+```
+
+### 3.2 Sales
+
+#### `POST /api/v1/sales`
+Create a new sale (POS, wholesale, etc.). This endpoint triggers FIFO stock deduction and accounting postings atomically.
+
+**Request Body:**
+```json
+{
+  "customer_id": 10,
+  "sale_date": "2026-07-15",
+  "sale_type": "POS",
+  "warehouse_id": 1,
+  "discount_percent": 5,
+  "tax_percent": 15,
+  "event_tag": "Eid2026",
+  "note": "",
+  "items": [
+    {
+      "product_id": 101,
+      "quantity": 2,
+      "unit_price": 50.0,
+      "discount_percent": 0,
+      "tax_percent": 15
+    }
+  ],
+  "payments": [
+    {
+      "amount": 95.0,
+      "payment_method": "Cash",
+      "reference": "",
+      "payment_date": "2026-07-15"
+    }
+  ]
+}
+```
+**Response 201:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 200,
+    "invoice_number": "INV-2026-200",
+    "grand_total": 109.25,
+    "paid_amount": 95.00,
+    "due_amount": 14.25,
+    "status": "Completed",
+    "payment_status": "Partial"
+  }
+}
+```
+**Common Errors:**  
+- `409 INSUFFICIENT_STOCK` – not enough quantity.  
+- `422 INVALID_ITEM` – product not found or inactive.
+
+#### `GET /api/v1/sales`
+List sales with filtering and pagination.
+
+**Query Parameters:** `customer_id`, `from_date`, `to_date`, `status`, `payment_status`, `sale_type`, `limit`, `cursor`.
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 200,
+      "invoice_number": "INV-2026-200",
+      "customer_name": "Rahim Uddin",
+      "sale_date": "2026-07-15",
+      "grand_total": 109.25,
+      "paid_amount": 95.0,
+      "due_amount": 14.25,
+      "status": "Completed",
+      "payment_status": "Partial"
+    }
+  ],
+  "meta": {
+    "next_cursor": "eyJpZCI6MTk5fQ==",
+    "has_more": true
+  }
+}
+```
+
+#### `GET /api/v1/sales/{id}`
+Retrieve a sale with full details, including items, batches used, and payments.
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 200,
+    "invoice_number": "INV-2026-200",
+    "customer": { "id": 10, "name": "Rahim Uddin", "phone": "01712-345678" },
+    "warehouse": "Main Store",
+    "items": [
+      {
+        "id": 301,
+        "product_id": 101,
+        "product_name": "Napa Extra",
+        "quantity": 2,
+        "unit_price": 50.0,
+        "line_total": 100.0,
+        "batches_used": [
+          { "batch_number": "B2026-001", "quantity": 2, "cost_price": 30.0 }
+        ]
+      }
+    ],
+    "payments": [
+      { "method": "Cash", "amount": 95.0 }
+    ],
+    "grand_total": 109.25,
+    "paid_amount": 95.0,
+    "due_amount": 14.25
+  }
+}
+```
+
+#### `POST /api/v1/sales/{id}/payments`
+Record an additional payment (due collection) against a sale.
+
+**Request Body:**
+```json
+{
+  "amount": 14.25,
+  "payment_method": "Cash",
+  "reference": "",
+  "payment_date": "2026-07-20"
+}
+```
+**Response 201:**
+```json
+{
+  "success": true,
+  "data": {
+    "payment_id": 45,
+    "new_paid_amount": 109.25,
+    "new_due_amount": 0.0,
+    "payment_status": "Paid"
+  }
+}
+```
+
+#### `POST /api/v1/sales/{id}/return`
+Create a sales return.
+
+**Request Body:**
+```json
+{
+  "return_date": "2026-07-16",
+  "reason": "Wrong product",
+  "restock": true,
+  "items": [
+    { "sale_item_id": 301, "quantity": 1, "batch_id": 23 }
+  ],
+  "refund_method": "Cash",
+  "refund_amount": 50.0
+}
+```
+**Response 201:**
+```json
+{
+  "success": true,
+  "data": {
+    "return_id": 10,
+    "return_number": "SR-2026-010",
+    "stock_adjusted": true
+  }
+}
+```
+
+#### `POST /api/v1/quotations`
+Create a quotation (estimate).
+
+**Request Body:** Similar to sale without payments. `status` defaults to `Draft`.  
+**Response 201:** Quotation object.
+
+#### `PUT /api/v1/quotations/{id}/convert`
+Convert a quotation into a sale.
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": {
+    "sale_id": 201,
+    "invoice_number": "INV-2026-201"
+  }
+}
+```
+
+#### `POST /api/v1/sales/{id}/delivery`
+Create a delivery note linked to a sale.
+
+**Request Body:**
+```json
+{
+  "delivery_date": "2026-07-17",
+  "address": "123, Gulshan, Dhaka",
+  "driver_name": "Karim"
+}
+```
+**Response 201:** Delivery note object.
+
+#### `PUT /api/v1/delivery-notes/{id}`
+Update delivery status.
+
+**Request Body:**
+```json
+{ "status": "Dispatched" }
+```
+**Response 200:** Updated note.
+
+---
+
+### 3.3 Purchase
+
+#### `POST /api/v1/purchases/orders`
+Create a purchase order.
+
+**Request Body:**
+```json
+{
+  "supplier_id": 5,
+  "order_date": "2026-07-15",
+  "expected_date": "2026-07-25",
+  "warehouse_id": 1,
+  "items": [
+    { "product_id": 101, "quantity": 100, "unit_price": 12.0 }
+  ],
+  "note": "Urgent"
+}
+```
+**Response 201:** Purchase order object.
+
+#### `GET /api/v1/purchases/orders`
+List purchase orders with filters (`status`, `supplier_id`).
+
+#### `POST /api/v1/purchases/orders/{id}/convert`
+Convert PO to purchase invoice.
+
+**Response 201:** New purchase object.
+
+#### `POST /api/v1/purchases`
+Create a purchase invoice (goods received). Triggers stock addition and accounting.
+
+**Request Body:**
+```json
+{
+  "supplier_id": 5,
+  "purchase_date": "2026-07-15",
+  "warehouse_id": 1,
+  "discount": 100.0,
+  "tax_amount": 225.0,
+  "paid_amount": 1000.0,
+  "payment_method": "Cash",
+  "items": [
+    {
+      "product_id": 101,
+      "quantity": 100,
+      "unit_price": 12.0,
+      "batch_number": "B2026-07",
+      "expiry_date": "2027-12-31"
+    }
+  ]
+}
+```
+**Response 201:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 50,
+    "invoice_number": "PINV-2026-050",
+    "grand_total": 1725.0,
+    "due_amount": 725.0
+  }
+}
+```
+
+#### `GET /api/v1/purchases/{id}`
+Get full purchase details with items and payments.
+
+#### `POST /api/v1/purchases/{id}/return`
+Create a purchase return.
+
+**Request Body:**
+```json
+{
+  "return_date": "2026-07-18",
+  "reason": "Expired batch",
+  "items": [
+    { "purchase_item_id": 45, "quantity": 10, "batch_id": 23, "restock": false }
+  ]
+}
+```
+**Response 201:** Return object.
+
+#### `POST /api/v1/suppliers/{id}/payments`
+Record a payment to a supplier.
+
+**Request Body:**
+```json
+{
+  "purchase_id": 50,
+  "amount": 500.0,
+  "payment_date": "2026-07-20",
+  "payment_method": "Bank",
+  "reference": "TRX-789"
+}
+```
+**Response 201:** Payment record.
+
+---
+
+### 3.4 Inventory
+
+#### `GET /api/v1/inventory/stock`
+Get current stock with optional filters.
+
+**Query Parameters:** `warehouse_id`, `category_id`, `batch`, `low_stock` (boolean), `expiring` (boolean), `product_id`.
+
+**Response 200:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "product_id": 101,
+      "product_name": "Napa Extra",
+      "category": "Medicine",
+      "unit": "Strip",
+      "total_stock": 95,
+      "batches": [
+        {
+          "batch_id": 23,
+          "batch_number": "B2026-07",
+          "expiry_date": "2027-12-31",
+          "quantity": 95,
+          "cost_price": 12.0
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### `POST /api/v1/inventory/transfer`
+Transfer stock between warehouses.
+
+**Request Body:**
+```json
+{
+  "from_warehouse_id": 1,
+  "to_warehouse_id": 2,
+  "items": [
+    { "product_id": 101, "batch_id": 23, "quantity": 20 }
+  ],
+  "note": "Branch restock"
+}
+```
+**Response 201:** Transfer record.
+
+#### `POST /api/v1/inventory/adjustment`
+Manual stock adjustment.
+
+**Request Body:**
+```json
+{
+  "warehouse_id": 1,
+  "reason": "Physical count",
+  "items": [
+    { "product_id": 101, "batch_id": 23, "current_qty": 95, "new_qty": 92, "difference": -3 }
+  ]
+}
+```
+**Response 201:** Adjustment record.
+
+#### `POST /api/v1/inventory/damage`
+Mark products as damaged.
+
+**Request Body:**
+```json
+{
+  "warehouse_id": 1,
+  "product_id": 101,
+  "batch_id": 23,
+  "quantity": 5,
+  "reason": "Broken strip"
+}
+```
+**Response 200:** Damage recorded, stock reduced.
+
+#### `GET /api/v1/inventory/batches?product_id=101`
+List batches for a product.
+
+**Response:** Array of batches with `batch_number`, `expiry_date`, `current_quantity`.
+
+#### `GET /api/v1/inventory/alerts?type=low_stock|expiring`
+Get low stock or expiring product alerts.
+
+---
+
+### 3.5 Accounting
+
+#### `GET /api/v1/accounting/accounts`
+Chart of accounts.
+
+**Query Parameters:** `type` (Asset, Liability, …), `active`.
+
+**Response 200:** Array of `{id, account_code, account_name, type, balance}`.
+
+#### `POST /api/v1/accounting/accounts`
+Create a custom account.
+
+**Request Body:** `{ "account_code": "5500", "account_name": "Marketing Expense", "type": "Expense" }`
+
+#### `POST /api/v1/accounting/journal`
+Create a manual journal entry.
+
+**Request Body:**
+```json
+{
+  "entry_date": "2026-07-15",
+  "reference": "JE-2026-015",
+  "note": "Monthly rent",
+  "lines": [
+    { "account_id": 51, "debit": 12000, "credit": 0, "description": "Rent" },
+    { "account_id": 10, "debit": 0, "credit": 12000, "description": "Cash" }
+  ]
+}
+```
+**Response 201:** Entry object.
+
+#### `GET /api/v1/accounting/journal`
+List journal entries. Filters: `from_date`, `to_date`, `account_id`.
+
+#### `GET /api/v1/accounting/ledger?account_id=10&from=2026-07-01&to=2026-07-31`
+Account ledger with running balance.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    { "date": "2026-07-05", "reference": "INV-200", "debit": 2000, "credit": 0, "balance": 2000 },
+    ...
+  ]
+}
+```
+
+#### `GET /api/v1/accounting/trial-balance?as_of_date=2026-07-31`
+Trial balance.
+
+**Response:** List of `{account_id, account_name, debit, credit}`.
+
+#### `GET /api/v1/accounting/profit-loss?from=2026-01-01&to=2026-12-31`
+Profit & loss statement.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "revenue": 500000,
+    "expenses": 450000,
+    "net_profit": 50000
+  }
+}
+```
+
+#### `GET /api/v1/accounting/balance-sheet?as_of_date=2026-12-31`
+Balance sheet.
+
+**Response:** `{ "assets": ..., "liabilities": ..., "equity": ... }`
+
+---
+
+### 3.6 Customers & Suppliers
+
+#### `POST /api/v1/customers`
+Create a new customer.
+
+**Request Body:** `{ "name": "Rahim", "phone": "01712...", ... }`  
+**Response 201:** Customer object.
+
+#### `GET /api/v1/customers`
+Search customers (by `phone`, `name`, `group_id`). Paginated.
+
+#### `GET /api/v1/customers/{id}`
+Customer details + total due + loyalty points.
+
+#### `POST /api/v1/suppliers`
+Create a supplier.
+
+**Request Body:** `{ "name": "Square Pharma", "phone": "...", "company": "..." }`
+
+#### `GET /api/v1/suppliers/{id}/ledger`
+Supplier ledger (purchases and payments).
+
+---
+
+### 3.7 Education (Academy)
+
+#### `POST /api/v1/academic-batches`
+Create a course batch.
+
+**Request Body:** `{ "course_id": 5, "name": "Basic Computer Morning", "start_date": "...", "end_date": "..." }`
+
+#### `POST /api/v1/enrollments`
+Enroll a student into a batch.
+
+**Request Body:** `{ "student_id": 10, "batch_id": 3, "enrollment_date": "2026-07-15" }`
+
+#### `POST /api/v1/student-attendances`
+Record attendance.
+
+**Request Body:** `{ "enrollment_id": 50, "date": "2026-07-15", "status": "Present" }`
+
+#### `GET /api/v1/students/{id}/profile`
+Student 360° profile: enrollments, fee history, attendance, exam results.
+
+---
+
+### 3.8 Public Portal (unauthenticated)
+
+#### `GET /public/v1/portal/{portal_token}/students`
+Return list of student IDs (and optionally names) for the portal QR.
+
+**Response:**
+```json
+{
+  "students": [
+    { "student_id": "STU-101" },
+    { "student_id": "STU-102" }
+  ]
+}
+```
+
+#### `POST /public/v1/portal/{portal_token}/login`
+Login with student ID and secret to view own profile.
+
+**Request:**
+```json
+{ "student_id": "STU-101", "secret": "abcd1234" }
+```
+**Response:**
+```json
+{
+  "token": "portal_jwt...",
+  "profile": {
+    "name": "Rahim",
+    "batch": "Morning 2026",
+    "total_fee": 6000,
+    "paid": 4000,
+    "due": 2000,
+    "attendance_percent": 85
+  }
+}
+```
+
+#### `GET /public/v1/qr/{token}/profile`
+Direct QR scan – returns student profile without password (if token is valid).
+
+**Response:** Same profile object, but only non‑sensitive fields.
+
+---
+
+## 4. gRPC Sync Service Contracts
+
+The sync service uses **gRPC** with Protocol Buffers. The `.proto` file is the source of truth, stored at `proto/sync/v1/sync.proto`.
+
+### 4.1 Service Definition
+
+```protobuf
+syntax = "proto3";
+package amarhisab.sync.v1;
+
+service SyncService {
+  // Push local changes to the cloud.
+  rpc PushBatch(PushBatchRequest) returns (PushBatchResponse);
+
+  // Pull remote changes since the last known sequence.
+  rpc PullChanges(PullRequest) returns (stream ChangeEvent);
+
+  // (Future) Bidirectional real‑time sync stream.
+  rpc SyncStream(stream ChangeEvent) returns (stream ChangeEvent);
+}
+
+message PushBatchRequest {
+  string device_id = 1;
+  int64 last_synced_sequence = 2;
+  repeated ChangeEvent changes = 3;
+}
+
+message PushBatchResponse {
+  bool success = 1;
+  int64 accepted_sequence = 2;
+  repeated Conflict conflicts = 3;
+}
+
+message Conflict {
+  string change_id = 1;
+  string reason = 2;
+  bytes local_version = 3;
+  bytes remote_version = 4;
+}
+
+message PullRequest {
+  string device_id = 1;
+  int64 last_remote_sequence = 2;
+  string business_id = 3;
+}
+
+message ChangeEvent {
+  string change_id = 1;       // UUID
+  string entity_type = 2;
+  int64 entity_id = 3;
+  string operation = 4;       // "INSERT", "UPDATE", "DELETE"
+  bytes payload = 5;          // JSON
+  bytes old_values = 6;       // JSON
+  int64 timestamp_ms = 7;
+  int64 sequence = 8;         // device‑local sequence
+  string device_id = 9;
+}
+```
+
+**Service Details:**
+- **PushBatch:** The local server sends an ordered batch of changes. The cloud processes them in order, applies conflict resolution (last‑write‑wins by default), and returns the highest accepted sequence number.
+- **PullChanges:** Server‑side streaming call. The cloud streams all events with a global sequence greater than `last_remote_sequence`. The client applies them in order.
+- **SyncStream:** Bidirectional stream for near‑real‑time sync (future). Both sides can send and receive changes simultaneously.
+
+**Idempotency:**  
+The cloud deduplicates by `change_id`. Duplicate pushes are acknowledged but produce no side effects.
+
+**Authentication:**  
+gRPC channels are secured with mTLS using device certificates, or a device‑specific JWT in the metadata.
+
+### 4.2 Proto Versioning
+- Package name includes major version (`amarhisab.sync.v1`).  
+- New fields may be added with new tag numbers; old fields must not be removed or renumbered.  
+- If a breaking change is required, a new service version (e.g., `SyncServiceV2`) is introduced and both coexist during migration.
+
+---
+
+## 5. Shared Data Types & Enums
+
+### 5.1 Common Fields
+- `business_id` (integer) – mandatory for multi‑tenant isolation.  
+- `created_at`, `updated_at` (ISO‑8601 string) – timestamps.  
+- `created_by` (integer) – user ID who performed the action.  
+- `status` – many entities have a status field; possible values are defined per entity.
+
+### 5.2 Money
+All monetary values are represented as `REAL` (double) in JSON and handled with proper rounding in the application. The currency is always the one configured for the business (default BDT). Currently, no multi‑currency amounts are exposed in a single object; if needed, a `{ amount: 100.0, currency: "BDT" }` structure will be introduced in a future version.
+
+### 5.3 Common Enums
+- **SaleType:** `POS`, `Retail`, `Wholesale`, `Quotation`, `Delivery`
+- **PaymentMethod:** `Cash`, `Bank`, `bKash`, `Nagad`, `Card`, `Wallet`
+- **PurchaseStatus:** `Draft`, `Sent`, `Received`, `Cancelled`
+- **InvoiceStatus:** `Draft`, `Hold`, `Completed`, `Returned`, `Cancelled`
+- **MovementType:** `Purchase`, `Sale`, `Transfer_In`, `Transfer_Out`, `Adjustment`, `Damage`, `Return`, `Expiry`
+- **AccountType:** `Asset`, `Liability`, `Equity`, `Revenue`, `Expense`, `Contra Revenue`
+
+These are transmitted as strings and validated by the server.
+
+---
+
+## 6. Versioning & Deprecation Policy
+
+### 6.1 REST API Versions
+- The current version is `v1`.  
+- When a breaking change is necessary (e.g., removing a field, changing a field type), a new version (`v2`) is introduced.  
+- The old version is maintained for **6 months** after the new version’s release, during which time a deprecation notice is added to the response header (`Sunset: Sat, 01 Jan 2027 00:00:00 GMT`) and documented.  
+- Clients are encouraged to migrate during the deprecation window.
+
+### 6.2 Non‑Breaking Changes
+The following are considered backward‑compatible and do **not** require a version bump:
+- Adding a new endpoint.
+- Adding a new optional request field.
+- Adding a new field to a response (clients must be tolerant of unknown fields).
+- Expanding an enum with a new value (clients must treat unrecognised values gracefully).
+
+### 6.3 gRPC Versions
+- Services follow the same major‑version principle as the REST API.  
+- Breaking changes result in a new service (`SyncServiceV2`) that coexists with the old version.  
+- Field additions are safe; field removals or type changes are breaking.  
+- Migration strategy: New clients use the new service; old clients continue to use the old service until all clients are updated.
+
+---
+
+*This Proto Contract Book is the binding agreement for all system communication. Any changes must be reviewed against this document to ensure compatibility. For the complete generated OpenAPI specification and proto files, refer to the `api/` directory in the repository.*

@@ -1,0 +1,118 @@
+{
+  "meta": {
+    "timestamp": "2026-08-08T17:25:09.245814Z",
+    "platform": "windows",
+    "platformVersion": "\"Windows 10 Pro\" 10.0 (Build 19045)",
+    "dartSdkPath": "D:\\flutter\\bin\\cache\\dart-sdk\\bin\\dart.exe",
+    "dartSdkVersion": "",
+    "upgradablePackages": [],
+    "envKeys": [
+      "PORT",
+      "HOST",
+      "DB_PATH",
+      "LOG_LEVEL",
+      "JWT_SECRET",
+      "CLOUD_SYNC_ENABLED",
+      "SYNC_ENABLED",
+      "SYNC_HOST",
+      "SYNC_PORT",
+      "SYNC_DEVICE_ID",
+      "SYNC_BUSINESS_ID",
+      "POSTGRES_USER",
+      "POSTGRES_PASSWORD",
+      "POSTGRES_DB",
+      "POSTGRES_HOST",
+      "POSTGRES_PORT",
+      "REDIS_HOST",
+      "REDIS_PORT",
+      "REDIS_PASSWORD",
+      "TLS_DOMAIN",
+      "TLS_EMAIL"
+    ],
+    "dbPath": "D:\\Amar Hisab\\data\\amar_hisab.db"
+  },
+  "checks": [
+    {
+      "id": "sdk",
+      "name": "Dart SDK version",
+      "status": "FAIL",
+      "summary": "SDK missing",
+      "durationMs": 99,
+      "details": [
+        ""
+      ]
+    },
+    {
+      "id": "dependencies",
+      "name": "Dependency status",
+      "status": "PASS",
+      "summary": "all dependencies resolvable",
+      "durationMs": 43785,
+      "details": []
+    },
+    {
+      "id": "codegen",
+      "name": "Code generation (build_runner)",
+      "status": "PASS",
+      "summary": "build_runner succeeded",
+      "durationMs": 59657,
+      "details": [
+        "[INFO] Generating build script...\n[INFO] Generating build script completed, took 634ms\n\n[INFO] Initializing inputs\n[INFO] Reading cached asset graph...\n[INFO] Reading cached asset graph completed, took 401ms\n\n[INFO] Checking for updates since last build...\n[INFO] Checking for updates since last build completed, took 23.4s\n\n[INFO] Running build...\n[INFO] 1.1s elapsed, 1/2 actions completed.\n[INFO] 4.3s elapsed, 1/2 actions completed.\n[INFO] Running build completed, took 4.6s\n\n[INFO] Caching finalized dependency graph...\n[INFO] Caching finalized dependency graph completed, took 183ms\n\n[INFO] Succeeded after 4.8s with 0 outputs (2 actions)\n\n\n"
+      ]
+    },
+    {
+      "id": "analysis",
+      "name": "Static analysis (dart analyze --fatal-warnings)",
+      "status": "PASS",
+      "summary": "2 issues found",
+      "durationMs": 117274,
+      "details": [
+        "Analyzing Amar Hisab...\n\n   info - audit.dart:296:5 - Local variables should be final. Try making the variable final. - prefer_final_locals\n   info - audit.dart:403:42 - Unnecessary braces in a string interpolation. Try removing the braces. - unnecessary_brace_in_string_interps\n\n2 issues found.\n\n"
+      ]
+    },
+    {
+      "id": "tests",
+      "name": "Test execution (dart test)",
+      "status": "NA",
+      "summary": "No root-level test/ directory (backend ships smoke-tested via audit)",
+      "durationMs": 0,
+      "details": []
+    },
+    {
+      "id": "env",
+      "name": ".env file validation",
+      "status": "PASS",
+      "summary": ".env valid (21 vars)",
+      "durationMs": 75,
+      "details": []
+    },
+    {
+      "id": "database",
+      "name": "Database integrity",
+      "status": "FAIL",
+      "summary": "database cannot be opened (corruption?)",
+      "durationMs": 650,
+      "details": [
+        "Error: Couldn't resolve the package 'sqlite3' in 'package:sqlite3/sqlite3.dart'.\r\n/C:/Users/user/AppData/Local/Temp/ah_audit_1786210130186.dart:1:8: Error: Not found: 'package:sqlite3/sqlite3.dart'\r\nimport 'package:sqlite3/sqlite3.dart';\r\n       ^\r\n/C:/Users/user/AppData/Local/Temp/ah_audit_1786210130186.dart:5:14: Error: Undefined name 'sqlite3'.\r\n  final db = sqlite3.open(\"D:\\\\\\\\Amar Hisab\\\\\\\\data\\\\\\\\amar_hisab.db\");\r\n             ^^^^^^^\r\n"
+      ]
+    },
+    {
+      "id": "port",
+      "name": "Port 8080 availability",
+      "status": "PASS",
+      "summary": "port 8080 free",
+      "durationMs": 0,
+      "details": []
+    },
+    {
+      "id": "api",
+      "name": "API smoke tests",
+      "status": "FAIL",
+      "summary": "could not launch server",
+      "durationMs": 85,
+      "details": [
+        "Invalid argument (computation): The type parameter is not nullable: null"
+      ]
+    }
+  ]
+}

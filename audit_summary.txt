@@ -1,0 +1,14 @@
+Amar Hisab — System Audit
+2026-08-08T17:25:09.245814Z
+============================================================
+[FAIL] Dart SDK version: SDK missing
+[PASS] Dependency status: all dependencies resolvable
+[PASS] Code generation (build_runner): build_runner succeeded
+[PASS] Static analysis (dart analyze --fatal-warnings): 2 issues found
+[N/A ] Test execution (dart test): No root-level test/ directory (backend ships smoke-tested via audit)
+[PASS] .env file validation: .env valid (21 vars)
+[FAIL] Database integrity: database cannot be opened (corruption?)
+[PASS] Port 8080 availability: port 8080 free
+[FAIL] API smoke tests: could not launch server
+============================================================
+RESULT: 5 PASS, 3 FAIL, 1 N/A

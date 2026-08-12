@@ -1,0 +1,722 @@
+# Amar Hisab Database Book  
+**Document Version:** 1.0  
+**Last Updated:** 2026-07-15  
+**Audience:** Database Administrators, Developers, System Architects  
+
+---
+
+## 1. Introduction
+
+This book is the definitive reference for the physical database schema of **Amar Hisab**. It documents every table, column, data type, constraint, index, and relationship in the system. The schema is designed to support the offline‑first, multi‑business‑type architecture while maintaining strong data integrity, enabling efficient synchronisation, and providing a complete audit trail.
+
+### 1.1 Scope
+- Complete DDL for all tables in the local SQLite database.
+- Column descriptions and business rules.
+- Primary keys, foreign keys, unique constraints, and check constraints.
+- Recommended indexes for performance.
+- Views and materialised summary tables (where applicable).
+- Data lifecycle policies (archival, retention).
+- Migration strategy and versioning.
+
+### 1.2 Database Engine
+- **Local:** SQLite 3.x (required). The database file uses WAL journal mode, full‑text search (FTS5) for product/customer search, and optional encryption via SQLCipher.
+- **Cloud (optional):** PostgreSQL 15+ for the Sync Service. The cloud schema is a superset; only the local schema is documented here. The cloud tables for sync (`cloud_change_log`, etc.) are defined in the Sync Service repository.
+
+### 1.3 Naming Conventions
+- Tables are named in lower‑case `snake_case`, pluralised for collections (e.g., `sales`, `products`).
+- Primary keys are always `id INTEGER PRIMARY KEY AUTOINCREMENT`.
+- Foreign keys follow the pattern `{referenced_table}_id` (e.g., `customer_id`).
+- Timestamps are stored as ISO‑8601 text (`YYYY-MM-DD HH:MM:SS` or `YYYY-MM-DD` for dates). Use `TEXT` type.
+- Monetary values are stored as `REAL` (SQLite does not have a decimal type; application ensures proper rounding).
+- Soft‑delete columns use `is_deleted INTEGER DEFAULT 0` and `deleted_at TEXT`.
+
+---
+
+## 2. Entity‑Relationship Overview
+
+The schema is organised into the following modules:
+- **Core:** businesses, warehouses, users, roles, permissions, settings.
+- **Product & Inventory:** products, categories, units, batches, stock, stock_movements.
+- **Sales:** sales, sale_items, sale_payments, sale_item_batches, sales_returns, quotations, delivery_notes.
+- **Purchase:** purchases, purchase_items, purchase_orders, purchase_returns, supplier_payments.
+- **Accounting:** chart_of_accounts, journal_entries, journal_lines, posting_templates.
+- **Customer & Supplier:** customers, customer_groups, suppliers, customer_tokens.
+- **Education:** academic_batches, student_enrollments, student_attendances, exam_results, student_secrets.
+- **HRM:** employees, attendance, salary.
+- **Security & Audit:** users, roles, permissions, audit_log.
+- **Sync & Change Log:** change_log, sync_state, device_registry.
+
+Relationships are enforced via foreign keys in SQLite only when `PRAGMA foreign_keys = ON` (enabled by the application).
+
+---
+
+## 3. Table Definitions
+
+### 3.1 Core Tables
+
+#### `businesses`
+Stores each separate business (tenant) in a multi‑business installation.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | Unique business ID |
+| name | TEXT | NOT NULL | Business display name |
+| type | TEXT | NOT NULL | Business type code (e.g., 'pharmacy', 'grocery') |
+| address | TEXT | | Physical address |
+| phone | TEXT | | Contact number |
+| email | TEXT | | Contact email |
+| currency | TEXT | DEFAULT 'BDT' | ISO currency code |
+| tax_default | REAL | DEFAULT 0 | Default tax percent |
+| created_at | TEXT | DEFAULT CURRENT_TIMESTAMP | |
+| updated_at | TEXT | | |
+
+**Index:** none (usually single row).
+
+#### `warehouses`
+Represents physical stores, branches, or stock locations.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| business_id | INTEGER | FK businesses.id NOT NULL | |
+| name | TEXT | NOT NULL | e.g., "Main Store", "Branch 2" |
+| address | TEXT | | |
+| is_active | INTEGER | DEFAULT 1 | 1=active, 0=disabled |
+
+**Index:** `(business_id)`
+
+#### `users`
+User accounts for the local server.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| business_id | INTEGER | FK businesses.id NOT NULL | |
+| username | TEXT | NOT NULL UNIQUE | |
+| password_hash | TEXT | NOT NULL | Argon2id hash |
+| full_name | TEXT | | |
+| role_id | INTEGER | FK roles.id | |
+| is_active | INTEGER | DEFAULT 1 | |
+| last_login | TEXT | | |
+| created_at | TEXT | DEFAULT CURRENT_TIMESTAMP | |
+
+**Index:** `(business_id, username)`
+
+#### `roles`
+Pre‑defined roles (Owner, Admin, Manager, Cashier, etc.)
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| name | TEXT | NOT NULL UNIQUE | Role name |
+| description | TEXT | | |
+
+#### `permissions`
+Permission matrix (role‑resource‑action). Pre‑populated based on business type.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| role_id | INTEGER | FK roles.id NOT NULL | |
+| resource | TEXT | NOT NULL | e.g., 'sale', 'product' |
+| action | TEXT | NOT NULL | 'create', 'read', 'update', 'delete', 'approve' |
+
+**Unique constraint:** `(role_id, resource, action)`
+
+#### `settings`
+Key‑value application settings (per business). Avoids schema changes for minor config.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| business_id | INTEGER | FK businesses.id NOT NULL | |
+| key | TEXT | NOT NULL | |
+| value | TEXT | | |
+
+**Unique:** `(business_id, key)`
+
+---
+
+### 3.2 Product & Inventory
+
+#### `products`
+Master product list.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| business_id | INTEGER | FK businesses.id NOT NULL | |
+| code | TEXT | UNIQUE | Product code/SKU |
+| barcode | TEXT | | UPC/EAN barcode |
+| name | TEXT | NOT NULL | |
+| description | TEXT | | |
+| category_id | INTEGER | FK categories.id | |
+| brand_id | INTEGER | FK brands.id | |
+| unit_id | INTEGER | FK units.id | Default unit |
+| type | TEXT | DEFAULT 'Goods' | 'Goods' or 'Service' |
+| is_inventory | INTEGER | DEFAULT 1 | 1=stock tracked, 0=non‑stock (service) |
+| is_batch_tracked | INTEGER | DEFAULT 0 | 1=enable batch/expiry tracking |
+| is_serial_tracked | INTEGER | DEFAULT 0 | |
+| min_stock | REAL | DEFAULT 0 | Low stock threshold |
+| selling_price | REAL | | Default selling price (can be overridden per sale) |
+| cost_price | REAL | | Default cost (for FIFO if not batch‑tracked) |
+| image_path | TEXT | | Path to product image |
+| is_active | INTEGER | DEFAULT 1 | |
+| created_at | TEXT | | |
+| updated_at | TEXT | | |
+
+**Indexes:** `(business_id, code)`, `(barcode)`, `(category_id)`, `(name)` with FTS5 virtual table for full‑text search.
+
+#### `categories`, `brands`, `units`
+Simple look‑up tables: `id`, `business_id`, `name`, `is_active`.
+
+#### `variants` (optional)
+For products with variants (size, color). Separate table:
+- `id`, `product_id`, `attribute`, `value`, `price_adjustment`, `barcode`, `stock` (if variant‑level stock not used, rely on batches).
+
+#### `batches`
+Inventory batches (for batch‑tracked products).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| product_id | INTEGER | FK products.id NOT NULL | |
+| batch_number | TEXT | NOT NULL | |
+| manufacture_date | TEXT | | YYYY-MM-DD |
+| expiry_date | TEXT | | YYYY-MM-DD |
+| cost_price | REAL | NOT NULL | Per‑unit cost for this batch |
+| initial_quantity | REAL | NOT NULL | Originally received |
+| current_quantity | REAL | NOT NULL DEFAULT 0 | Remaining stock |
+| warehouse_id | INTEGER | FK warehouses.id NOT NULL | Location of this batch |
+| created_at | TEXT | | |
+| business_id | INTEGER | NOT NULL | |
+
+**Indexes:** `(product_id, expiry_date)`, `(warehouse_id)`, `(batch_number)`.
+**Check:** `current_quantity >= 0` (enforced in application).
+
+#### `stock` (Materialised Summary)
+Denormalised current stock per product per warehouse (optional, can be derived from `batches` and movements). This table is updated transactionally with stock movements.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| product_id | INTEGER | FK products.id NOT NULL | |
+| warehouse_id | INTEGER | FK warehouses.id NOT NULL | |
+| batch_id | INTEGER | FK batches.id (nullable) | |
+| quantity | REAL | NOT NULL DEFAULT 0 | |
+| business_id | INTEGER | NOT NULL | |
+
+**Unique:** `(product_id, warehouse_id, COALESCE(batch_id, 0))` (SQLite needs trigger/application logic).
+
+#### `stock_movements`
+Immutable ledger of all inventory changes.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| product_id | INTEGER | NOT NULL | |
+| warehouse_id | INTEGER | NOT NULL | |
+| batch_id | INTEGER | (nullable) | |
+| movement_type | TEXT | NOT NULL | 'Purchase', 'Sale', 'Transfer_In', 'Transfer_Out', 'Adjustment', 'Damage', 'Return', 'Expiry' |
+| quantity | REAL | NOT NULL | Positive for in, negative for out |
+| reference_type | TEXT | | e.g., 'Sale', 'Purchase', 'Transfer' |
+| reference_id | INTEGER | | ID in the referenced table |
+| date | TEXT | NOT NULL | |
+| business_id | INTEGER | NOT NULL | |
+
+**Indexes:** `(product_id, date)`, `(warehouse_id, date)`, `(reference_type, reference_id)`
+
+#### `stock_adjustments` and `adjustment_items`
+Manual stock adjustments.
+
+`stock_adjustments`: `id`, `warehouse_id`, `reason`, `status` (Pending/Approved), `created_by`, `created_at`.
+`adjustment_items`: `id`, `adjustment_id`, `product_id`, `batch_id`, `current_qty`, `new_qty`, `difference`.
+
+---
+
+### 3.3 Sales Module
+
+#### `sales`
+Sale header.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| invoice_number | TEXT | UNIQUE NOT NULL | e.g., "INV-2026-001" |
+| customer_id | INTEGER | FK customers.id | |
+| sale_date | TEXT | NOT NULL | YYYY-MM-DD |
+| sale_type | TEXT | DEFAULT 'POS' | 'POS','Retail','Wholesale','Quotation','Delivery' |
+| warehouse_id | INTEGER | FK warehouses.id | |
+| total_amount | REAL | NOT NULL | Sum of item line totals (before global discount) |
+| discount_percent | REAL | DEFAULT 0 | |
+| discount_amount | REAL | DEFAULT 0 | |
+| tax_percent | REAL | DEFAULT 0 | |
+| tax_amount | REAL | DEFAULT 0 | |
+| grand_total | REAL | NOT NULL | total_amount - discount_amount + tax_amount |
+| paid_amount | REAL | DEFAULT 0 | |
+| due_amount | REAL | GENERATED ALWAYS AS (grand_total - paid_amount) | (SQLite: computed in app or via trigger) |
+| status | TEXT | DEFAULT 'Completed' | 'Draft','Hold','Completed','Returned','Cancelled' |
+| payment_status | TEXT | DEFAULT 'Paid' | 'Paid','Partial','Due' |
+| event_tag | TEXT | | e.g., 'Eid2026' |
+| note | TEXT | | |
+| business_id | INTEGER | NOT NULL | |
+| created_by | INTEGER | | |
+| created_at | TEXT | DEFAULT CURRENT_TIMESTAMP | |
+| updated_at | TEXT | | |
+
+**Indexes:** `(business_id, sale_date)`, `(customer_id)`, `(invoice_number)`, `(payment_status)`
+
+#### `sale_items`
+Line items of a sale.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| sale_id | INTEGER | FK sales.id ON DELETE CASCADE | |
+| product_id | INTEGER | NOT NULL | |
+| quantity | REAL | NOT NULL | |
+| unit_price | REAL | NOT NULL | |
+| discount_percent | REAL | DEFAULT 0 | |
+| discount_amount | REAL | DEFAULT 0 | |
+| tax_percent | REAL | DEFAULT 0 | |
+| tax_amount | REAL | DEFAULT 0 | |
+| line_total | REAL | NOT NULL | Computed: qty*unit_price - disc + tax |
+
+**Index:** `(sale_id)`
+
+#### `sale_item_batches`
+Records which batch was consumed for each sale item (FIFO tracking).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| sale_item_id | INTEGER | FK sale_items.id | |
+| batch_id | INTEGER | FK batches.id | |
+| quantity | REAL | NOT NULL | Quantity taken from this batch |
+| cost_price | REAL | NOT NULL | Cost per unit at time of sale (for COGS) |
+
+#### `sale_payments`
+Multiple payments per sale.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| sale_id | INTEGER | FK sales.id ON DELETE CASCADE | |
+| amount | REAL | NOT NULL | |
+| payment_method | TEXT | NOT NULL | 'Cash','Bank','bKash','Card','Wallet' |
+| reference | TEXT | | Transaction ID |
+| payment_date | TEXT | NOT NULL | |
+| created_by | INTEGER | | |
+
+#### `sales_returns` and `sales_return_items`
+Similar structure to sale and items, with `sale_id` reference, `restock` flag, `credit_amount`.
+
+#### `quotations`, `quotation_items`
+Similar to sale, with `status` (Draft, Sent, Converted, Expired). No payment info.
+
+#### `delivery_notes`
+Linked to a sale; fields: `sale_id`, `delivery_date`, `address`, `status` (Pending, Dispatched, Delivered), `driver_name`.
+
+---
+
+### 3.4 Purchase Module
+
+#### `purchases`
+Purchase invoice header.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| invoice_number | TEXT | UNIQUE NOT NULL | e.g., "PINV-2026-001" |
+| supplier_id | INTEGER | FK suppliers.id NOT NULL | |
+| purchase_date | TEXT | NOT NULL | |
+| warehouse_id | INTEGER | FK warehouses.id | |
+| reference_order_id | INTEGER | FK purchase_orders.id | |
+| total_amount | REAL | NOT NULL | |
+| discount | REAL | DEFAULT 0 | |
+| tax_amount | REAL | DEFAULT 0 | |
+| grand_total | REAL | NOT NULL | total - discount + tax |
+| paid_amount | REAL | DEFAULT 0 | |
+| due_amount | REAL | GENERATED ALWAYS AS (grand_total - paid_amount) | (app managed) |
+| status | TEXT | DEFAULT 'Pending' | 'Pending','Partial','Paid','Returned' |
+| note | TEXT | | |
+| business_id | INTEGER | NOT NULL | |
+| created_by | INTEGER | | |
+| created_at | TEXT | | |
+
+**Indexes:** `(business_id, purchase_date)`, `(supplier_id)`
+
+#### `purchase_items`
+Line items. Includes `batch_number`, `manufacture_date`, `expiry_date` (entered at receiving). These are used to create/update the `batches` table.
+
+#### `purchase_orders` and `purchase_order_items`
+PO header/items; status (Draft, Sent, Received). `expected_date`, `warehouse_id`.
+
+#### `purchase_returns` and `purchase_return_items`
+Similar to sales returns, with `purchase_id` reference.
+
+#### `supplier_payments`
+Payments to suppliers.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| supplier_id | INTEGER | FK suppliers.id NOT NULL | |
+| purchase_id | INTEGER | FK purchases.id (nullable for advances) | |
+| amount | REAL | NOT NULL | |
+| payment_date | TEXT | NOT NULL | |
+| payment_method | TEXT | | |
+| reference | TEXT | | |
+| note | TEXT | | |
+| business_id | INTEGER | NOT NULL | |
+
+---
+
+### 3.5 Accounting Module
+
+#### `chart_of_accounts`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| account_code | TEXT | UNIQUE NOT NULL | e.g., '1000' |
+| account_name | TEXT | NOT NULL | |
+| account_type | TEXT | NOT NULL | 'Asset','Liability','Equity','Revenue','Expense','Contra Revenue' |
+| parent_id | INTEGER | FK self | |
+| is_active | INTEGER | DEFAULT 1 | |
+| is_system | INTEGER | DEFAULT 0 | System accounts cannot be deleted |
+| business_id | INTEGER | NOT NULL | |
+
+**Index:** `(business_id, account_code)`
+
+#### `journal_entries`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| entry_number | TEXT | UNIQUE NOT NULL | |
+| entry_date | TEXT | NOT NULL | |
+| reference | TEXT | | Invoice number or PO |
+| note | TEXT | | |
+| is_auto | INTEGER | DEFAULT 0 | 1=system generated |
+| status | TEXT | DEFAULT 'posted' | 'draft','posted' |
+| business_id | INTEGER | NOT NULL | |
+| created_by | INTEGER | | |
+| created_at | TEXT | | |
+
+**Check:** posted entries cannot be modified (enforced by app; DB trigger can prevent UPDATE/DELETE on posted).
+
+#### `journal_lines`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| journal_entry_id | INTEGER | FK journal_entries.id ON DELETE CASCADE | |
+| account_id | INTEGER | FK chart_of_accounts.id NOT NULL | |
+| debit | REAL | DEFAULT 0 | |
+| credit | REAL | DEFAULT 0 | |
+| description | TEXT | | |
+
+**Check:** `debit > 0 OR credit > 0` (at least one non‑zero); total debits = total credits per entry (validated in app).
+
+#### `posting_templates` and `posting_template_lines`
+Define auto‑journal rules. `template_code`, `business_type`, `description`. Lines have `account_code`, `side`, `amount_calculation` expression.
+
+#### `accounting_periods`
+For fiscal year closing. `start_date`, `end_date`, `is_closed`.
+
+---
+
+### 3.6 Customer & Supplier
+
+#### `customers`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| business_id | INTEGER | NOT NULL | |
+| name | TEXT | NOT NULL | |
+| phone | TEXT | UNIQUE | |
+| email | TEXT | | |
+| address | TEXT | | |
+| group_id | INTEGER | FK customer_groups.id | |
+| credit_limit | REAL | DEFAULT 0 | |
+| total_purchases | REAL | DEFAULT 0 | Cumulative sales amount (for loyalty) |
+| loyalty_points | REAL | DEFAULT 0 | |
+| is_active | INTEGER | DEFAULT 1 | |
+| created_at | TEXT | | |
+
+**Indexes:** `(business_id, phone)`, `(name)` (FTS)
+
+#### `customer_groups`
+`id`, `business_id`, `name`, `discount_percent`.
+
+#### `suppliers`
+Similar to customers: `id`, `business_id`, `name`, `phone`, `email`, `address`, `company`, `is_active`.
+
+#### `customer_tokens`
+For QR‑based self‑service / digital ID.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| customer_id | INTEGER | UNIQUE NOT NULL | |
+| token | TEXT | UNIQUE NOT NULL | Random token |
+| expires_at | TEXT | | |
+| created_at | TEXT | | |
+
+---
+
+### 3.7 Education Module
+
+#### `academic_batches`
+Represents a course batch (different from inventory batches). To avoid name clash, we prefix with `academic_`.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| business_id | INTEGER | NOT NULL | |
+| course_id | INTEGER | FK products.id (where type='Service') | |
+| name | TEXT | NOT NULL | e.g., "Basic Computer Morning 2026" |
+| start_date | TEXT | | |
+| end_date | TEXT | | |
+| max_students | INTEGER | | |
+| instructor_id | INTEGER | FK employees.id | |
+| status | TEXT | DEFAULT 'Active' | 'Active','Completed','Cancelled' |
+
+#### `student_enrollments`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| student_id | INTEGER | FK customers.id NOT NULL | |
+| batch_id | INTEGER | FK academic_batches.id NOT NULL | |
+| enrollment_date | TEXT | NOT NULL | |
+| completion_date | TEXT | | |
+| status | TEXT | DEFAULT 'Active' | 'Active','Completed','Dropped' |
+| notes | TEXT | | |
+
+#### `student_attendances`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| enrollment_id | INTEGER | FK student_enrollments.id | |
+| date | TEXT | NOT NULL | |
+| status | TEXT | NOT NULL | 'Present','Absent','Late','Holiday' |
+| recorded_by | INTEGER | | |
+| recorded_at | TEXT | | |
+
+#### `exam_results`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| enrollment_id | INTEGER | FK student_enrollments.id | |
+| subject | TEXT | | |
+| marks_obtained | REAL | | |
+| total_marks | REAL | | |
+| grade | TEXT | | |
+| remarks | TEXT | | |
+
+#### `student_secrets`
+For portal login password.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| student_id | INTEGER | UNIQUE NOT NULL | |
+| secret_hash | TEXT | NOT NULL | |
+
+---
+
+### 3.8 HRM (Employees)
+
+#### `employees`
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| business_id | INTEGER | NOT NULL | |
+| name | TEXT | NOT NULL | |
+| phone | TEXT | | |
+| role | TEXT | | 'teacher','staff','driver' |
+| salary_amount | REAL | | |
+| commission_percent | REAL | | |
+| is_active | INTEGER | DEFAULT 1 | |
+
+#### `employee_attendance`
+For staff attendance tracking: `employee_id`, `date`, `check_in`, `check_out`.
+
+#### `salary_payments`
+Record of paid salaries: `employee_id`, `amount`, `payment_date`, `period_start`, `period_end`, `note`.
+
+---
+
+### 3.9 Security, Audit, and Sync
+
+#### `audit_log`
+Append‑only audit trail.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| timestamp | TEXT | DEFAULT CURRENT_TIMESTAMP | |
+| user_id | INTEGER | NOT NULL | |
+| entity_type | TEXT | NOT NULL | e.g., 'sale' |
+| entity_id | INTEGER | NOT NULL | |
+| action | TEXT | NOT NULL | 'CREATE','UPDATE','DELETE' |
+| field_name | TEXT | | |
+| old_value | TEXT | | |
+| new_value | TEXT | | |
+| business_id | INTEGER | NOT NULL | |
+
+**No UPDATE/DELETE allowed on this table (app enforced).**  
+**Index:** `(entity_type, entity_id, timestamp)`
+
+#### `change_log`
+Sync change events (transactional outbox).
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| change_id | TEXT | UNIQUE NOT NULL | UUID |
+| entity_type | TEXT | NOT NULL | |
+| entity_id | INTEGER | NOT NULL | |
+| operation | TEXT | NOT NULL | 'INSERT','UPDATE','DELETE' |
+| payload | TEXT | | JSON of the full row |
+| old_values | TEXT | | JSON of previous state (for UPDATE/DELETE) |
+| timestamp_ms | INTEGER | NOT NULL | Epoch ms |
+| sequence | INTEGER | NOT NULL | Monotonic per device |
+| sync_status | TEXT | DEFAULT 'pending' | 'pending','synced','conflict' |
+| device_id | TEXT | NOT NULL | |
+| business_id | INTEGER | NOT NULL | |
+
+**Index:** `(sync_status, device_id, sequence)`, `(business_id, change_id)`
+
+#### `sync_state`
+Tracks last synced sequence per device.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| device_id | TEXT | PK | |
+| last_synced_sequence | INTEGER | | |
+| last_synced_timestamp | INTEGER | | |
+| last_remote_sequence | INTEGER | | |
+
+#### `device_registry`
+Known devices for the business.
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PK AUTOINCREMENT | |
+| device_id | TEXT | UNIQUE NOT NULL | |
+| business_id | INTEGER | NOT NULL | |
+| device_name | TEXT | | |
+| public_key | TEXT | | For mTLS/device identity |
+| is_authorized | INTEGER | DEFAULT 1 | |
+
+---
+
+## 4. Indexes
+
+In addition to the indexes listed per table, the following composite indexes are critical:
+
+- `sales(business_id, sale_date DESC)`
+- `sale_items(sale_id)`
+- `sale_payments(sale_id)`
+- `purchases(business_id, purchase_date DESC)`
+- `purchase_items(purchase_id)`
+- `stock(product_id, warehouse_id, batch_id)`
+- `stock_movements(product_id, date)`
+- `batches(product_id, expiry_date)`
+- `journal_lines(journal_entry_id)`
+- `journal_lines(account_id, journal_entry_id)` (for ledger queries)
+- `audit_log(entity_type, entity_id)`
+- `change_log(device_id, sync_status)`
+
+Full‑Text Search (FTS5) virtual tables are created for `products(name, code, barcode)` and `customers(name, phone)`. These are kept in sync via triggers or application logic.
+
+---
+
+## 5. Views (Optional)
+
+Pre‑defined views for common reports (not stored as separate objects but documented here for consistency):
+
+- `customer_ledger_view`: UNION of sales and payments for a customer.
+- `supplier_ledger_view`: UNION of purchases and payments for a supplier.
+- `trial_balance_view`: Aggregated debits and credits per account up to a date.
+- `stock_valuation_view`: `batches.current_quantity * cost_price` grouped by product/warehouse.
+
+These can be implemented as in‑app queries rather than database views to keep the schema simple.
+
+---
+
+## 6. Data Archival and Retention
+
+- **Active Data:** Current and previous fiscal year remain in the main database.
+- **Warm Archive:** At the start of a new fiscal year, an archival job moves closed sales, purchases, and journal entries older than (current year – 2) into an `archive_YYYY.db` SQLite file. The main database retains summary records (`daily_sales_summary`, etc.).
+- **Audit Log:** Retained for 2 years in the main database, then exported to encrypted CSV and deleted.
+- **Change Log:** After successful sync, entries older than 30 days are purged (configurable). The cloud retains the event log as long as the tenant is active.
+- **Student data:** Attendance and exam results are kept indefinitely for the lifetime of the academy business, but can be anonymised upon student request.
+
+All archival operations are manual (triggered by admin) but scripted in the application. The DB schema includes `is_archived` flags where appropriate.
+
+---
+
+## 7. Migration Strategy
+
+- The database includes a `schema_version` table with a single row storing the current version number.
+- On application startup, the version is compared with the required version. If lower, a migration runner executes sequentially numbered SQL scripts (e.g., `migration_1_to_2.sql`).
+- Migrations are additive (`ALTER TABLE ADD COLUMN`), never destructive. Dropping columns or tables requires a major version and explicit user consent (with backup).
+- The cloud PostgreSQL schema is managed by `golang-migrate` and kept backward‑compatible.
+
+---
+
+## 8. Appendix: Data Dictionary Quick Reference
+
+A concise list of all tables and their primary purpose:
+
+| Table | Module | Purpose |
+|-------|--------|---------|
+| businesses | Core | Multi‑business tenants |
+| warehouses | Core | Branches/storage locations |
+| users | Core | User accounts |
+| roles | Core | Pre‑defined roles |
+| permissions | Core | Access control |
+| settings | Core | Key‑value configuration |
+| products | Inventory | Product master |
+| categories | Inventory | Product categories |
+| batches | Inventory | Inventory batch tracking |
+| stock | Inventory | Current stock summary |
+| stock_movements | Inventory | Immutable stock ledger |
+| stock_adjustments | Inventory | Manual stock corrections |
+| sales | Sales | Sale header |
+| sale_items | Sales | Sale line items |
+| sale_payments | Sales | Payments per sale |
+| sale_item_batches | Sales | FIFO batch allocation |
+| sales_returns | Sales | Returned sales |
+| quotations | Sales | Estimates/quotes |
+| delivery_notes | Sales | Delivery tracking |
+| purchases | Purchase | Purchase header |
+| purchase_items | Purchase | Purchase line items |
+| purchase_orders | Purchase | Purchase orders |
+| purchase_returns | Purchase | Returns to supplier |
+| supplier_payments | Purchase | Supplier payment history |
+| chart_of_accounts | Accounting | Account master |
+| journal_entries | Accounting | Journal header |
+| journal_lines | Accounting | Journal details |
+| posting_templates | Accounting | Auto‑post rules |
+| accounting_periods | Accounting | Fiscal periods |
+| customers | CRM | Customer master |
+| customer_groups | CRM | Customer grouping |
+| suppliers | CRM | Supplier master |
+| customer_tokens | CRM | QR/digital ID tokens |
+| academic_batches | Education | Course batches |
+| student_enrollments | Education | Student enrollments |
+| student_attendances | Education | Attendance records |
+| exam_results | Education | Exam scores |
+| student_secrets | Education | Portal passwords |
+| employees | HRM | Employee master |
+| employee_attendance | HRM | Staff attendance |
+| salary_payments | HRM | Salary records |
+| audit_log | Security | Immutable audit trail |
+| change_log | Sync | Transactional outbox |
+| sync_state | Sync | Sync position |
+| device_registry | Sync | Known devices |
+
+---
+
+*This Database Book is the authoritative physical schema reference. For business logic and data flow, refer to the **Architecture Book**. For API contracts, see the **Proto Contract Book**.*

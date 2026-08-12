@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+// Cloud Sync Service contract (Proto Contract Book §4).
+// This file is the single source of truth for both the Dart local-server
+// client and the Go cloud implementation.
+
+package amarhisab.sync.v1;
+
+option go_package = "github.com/amarhisab/amar-hisab/cloud/sync/proto/sync/v1;syncpb";
+
+service SyncService {
+  // Push local changes to the cloud.
+  rpc PushBatch(PushBatchRequest) returns (PushBatchResponse);
+
+  // Pull remote changes since the last known sequence.
+  rpc PullChanges(PullRequest) returns (stream ChangeEvent);
+
+  // (Future) Bidirectional real-time sync stream.
+  rpc SyncStream(stream ChangeEvent) returns (stream ChangeEvent);
+}
+
+message PushBatchRequest {
+  string device_id = 1;
+  int64 last_synced_sequence = 2;
+  repeated ChangeEvent changes = 3;
+}
+
+message PushBatchResponse {
+  bool success = 1;
+  int64 accepted_sequence = 2;
+  repeated Conflict conflicts = 3;
+}
+
+message Conflict {
+  string change_id = 1;
+  string reason = 2;
+  bytes local_version = 3;
+  bytes remote_version = 4;
+}
+
+message PullRequest {
+  string device_id = 1;
+  int64 last_remote_sequence = 2;
+  string business_id = 3;
+}
+
+message ChangeEvent {
+  string change_id = 1;       // UUID
+  string entity_type = 2;
+  int64 entity_id = 3;
+  string operation = 4;       // "INSERT", "UPDATE", "DELETE"
+  bytes payload = 5;          // JSON
+  bytes old_values = 6;       // JSON
+  int64 timestamp_ms = 7;
+  int64 sequence = 8;         // device-local sequence
+  string device_id = 9;
+}

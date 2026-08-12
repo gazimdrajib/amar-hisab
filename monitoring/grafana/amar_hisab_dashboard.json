@@ -1,0 +1,195 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Amar Hisab – Local-server health, sales, stock and sync KPIs (Architecture Book §11.7).",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "PROMETHEUS_DS"},
+      "description": "Is the Dart/Shelf API answering /health + /metrics?",
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"options": {"0": {"text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"text": "UP"}}, "type": "value"}
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "background", "orientation": "auto"},
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": {"type": "prometheus", "uid": "PROMETHEUS_DS"},
+          "editorMode": "code",
+          "expr": "up{job=\"amar-hisab\"}",
+          "legendFormat": "API server up",
+          "refId": "A"
+        }
+      ],
+      "title": "Backend status",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PROMETHEUS_DS"},
+      "description": "Seconds since last successful DI/boot (amar_hisab_uptime_seconds).",
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "value", "orientation": "auto"},
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {"expr": "amar_hisab_uptime_seconds", "legendFormat": "uptime (s)", "refId": "A"}
+      ],
+      "title": "Uptime",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PROMETHEUS_DS"},
+      "description": "Total sales for the current calendar day (count + BDT).",
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "id": 3,
+      "options": {"colorMode": "value", "orientation": "auto"},
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {"expr": "amar_hisab_sales_today_count", "legendFormat": "count", "refId": "A"},
+        {"expr": "amar_hisab_sales_today_amount", "legendFormat": "amount (৳)", "refId": "B"}
+      ],
+      "title": "Sales today",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PROMETHEUS_DS"},
+      "description": "Items at/below reorder level, and batches expiring within 30 days.",
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "id": 4,
+      "options": {"colorMode": "value", "orientation": "auto"},
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {"expr": "amar_hisab_low_stock_items", "legendFormat": "low-stock items", "refId": "A"},
+        {"expr": "amar_hisab_expiring_batches", "legendFormat": "expiring batches ≤30d", "refId": "B"}
+      ],
+      "title": "Stock alerts",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PROMETHEUS_DS"},
+      "description": "Pending changes waiting for cloud sync (sync_pending > 0 indicates backlog).",
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 4},
+      "id": 5,
+      "options": {"colorMode": "value", "orientation": "auto"},
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {"expr": "amar_hisab_sync_pending", "legendFormat": "pending", "refId": "A"}
+      ],
+      "title": "Sync backlog",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PROMETHEUS_DS"},
+      "description": "HTTP request counter as recorded by the Shelf pipeline.",
+      "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 4},
+      "id": 6,
+      "options": {"show": "recent", "textMode": "value_and_name"},
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {"expr": "sum(rate(amar_hisab_counters{name=\"requests.total\"}[5m]))", "legendFormat": "req / 5m", "refId": "A"}
+      ],
+      "title": "Rate of backend operations (5m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PROMETHEUS_DS"},
+      "description": "Elapsed seconds since the last successful scheduled backup (from health_check.sh). Alert when > 48h.",
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 4},
+      "id": 9,
+      "options": {"colorMode": "value", "orientation": "auto", "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 172800}]}},
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {"expr": "amar_hisab_backup_age_seconds", "legendFormat": "backup age (s)", "refId": "A"}
+      ],
+      "title": "Backup age",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PROMETHEUS_DS"},
+      "description": "5xx-style errors surfaced by the error-tracking counter incremented inside globalMiddleware.",
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 4},
+      "id": 10,
+      "options": {"colorMode": "value", "orientation": "auto"},
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {"expr": "amar_hisab_counters{name=\"errors.unhandled\"}", "legendFormat": "unhandled errors", "refId": "A"},
+        {"expr": "amar_hisab_counters{name=\"errors.unauthorized\"}", "legendFormat": "401/403 responses", "refId": "B"}
+      ],
+      "title": "Errors",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PROMETHEUS_DS"},
+      "description": "Time series for sales count and revenue.",
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 7,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {"expr": "amar_hisab_sales_today_count", "legendFormat": "Sales count", "refId": "A"},
+        {"expr": "amar_hisab_sales_today_amount", "legendFormat": "Revenue (৳)", "refId": "B"}
+      ],
+      "title": "Sales trend (today)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "PROMETHEUS_DS"},
+      "description": "Sync queue + low-stock signal together.",
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 8,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {"expr": "amar_hisab_sync_pending", "legendFormat": "Sync pending", "refId": "A"},
+        {"expr": "amar_hisab_low_stock_items", "legendFormat": "Low stock items", "refId": "B"},
+        {"expr": "amar_hisab_expiring_batches", "legendFormat": "Expiring batches ≤30d", "refId": "C"}
+      ],
+      "title": "Stock/Sync signals",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["amar-hisab", "monitoring"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Amar Hisab – System Health",
+  "uid": "amar-hisab-health",
+  "version": 1,
+  "weekStart": ""
+}

@@ -1,0 +1,181 @@
+# =============================================================================
+# Amar Hisab – Production Compose Stack
+# Production Deployment Guide §3 / §8 / Architecture Book §11.
+#
+# Services:
+#   backend   – Dart/Shelf API (built from ./Dockerfile), SQLite on data volume
+#   postgres  – Cloud-sync change store (only used when CLOUD_SYNC_ENABLED=true)
+#   redis     – Sync cache / pending-change queue
+#   nginx     – Reverse proxy with Let's Encrypt TLS termination
+#
+# Usage:
+#   cp .env.prod .env            # fill in real values
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+# =============================================================================
+
+name: amar-hisab-prod
+
+services:
+  # ---------------------------------------------------------------- backend --
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: amarhisab/backend:latest
+    container_name: amarhisab-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8080"
+      DB_PATH: /app/data/amar_hisab.db
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - amar_hisab_data:/app/data
+    networks:
+      - app
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # --------------------------------------------------------------- postgres --
+  # Used only by the optional cloud-sync service. Safe to keep running even
+  # when sync is disabled.
+  postgres:
+    image: postgres:15-alpine
+    container_name: amarhisab-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-amarhisab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-amarhisab_sync}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-amarhisab} -d ${POSTGRES_DB:-amarhisab_sync}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ------------------------------------------------------------------ redis --
+  # Cache / queue for the sync pipeline.
+  redis:
+    image: redis:7-alpine
+    container_name: amarhisab-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
+    volumes:
+      - redis_data:/data
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------- sync (go) --
+  # Optional cloud sync service (gRPC). Remove this block entirely when the
+  # deployment is single-site / offline-only (Deployment Guide §8).
+  sync:
+    build:
+      context: ./cloud/sync
+      dockerfile: Dockerfile
+    image: amarhisab/sync:latest
+    container_name: amarhisab-sync
+    restart: unless-stopped
+    profiles: ["sync"]
+    environment:
+      GRPC_ADDR: :9090
+      DATABASE_URL: postgres://${POSTGRES_USER:-amarhisab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-amarhisab_sync}?sslmode=disable
+      REDIS_ADDR: redis:6379
+    networks:
+      - app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ------------------------------------------------------------------ nginx --
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: amarhisab-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/nginx/ssl:/etc/nginx/ssl:ro
+      - certbot_webroot:/var/www/certbot
+    networks:
+      - app
+    depends_on:
+      - backend
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ---------------------------------------------------------------- certbot --
+  # One-shot renewal companion. Run dry-run first; certs land in
+  # ./deploy/nginx/ssl (mounted into nginx).
+  certbot:
+    image: certbot/certbot:v2.11.0
+    container_name: amarhisab-certbot
+    restart: "no"
+    profiles: ["tls"]
+    entrypoint: >
+      sh -c "certbot certonly --webroot
+      --webroot-path=/var/www/certbot
+      -d $${TLS_DOMAIN}
+      --email $${TLS_EMAIL}
+      --agree-tos --no-eff-email
+      && cp /etc/letsencrypt/live/$${TLS_DOMAIN}/fullchain.pem /etc/nginx/ssl/fullchain.pem
+      && cp /etc/letsencrypt/live/$${TLS_DOMAIN}/privkey.pem  /etc/nginx/ssl/privkey.pem
+      && chmod 644 /etc/nginx/ssl/fullchain.pem /etc/nginx/ssl/privkey.pem"
+    environment:
+      TLS_DOMAIN: ${TLS_DOMAIN:?Set TLS_DOMAIN in .env}
+      TLS_EMAIL: ${TLS_EMAIL:?Set TLS_EMAIL in .env}
+    volumes:
+      - certbot_etc:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+      - ./deploy/nginx/ssl:/etc/nginx/ssl
+    networks:
+      - app
+
+volumes:
+  amar_hisab_data:
+  postgres_data:
+  redis_data:
+  certbot_etc:
+  certbot_webroot:
+
+networks:
+  app:
+    driver: bridge

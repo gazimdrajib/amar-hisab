@@ -1,0 +1,347 @@
+# Amar Hisab Sitemap  
+**Document Version:** 1.0  
+**Last Updated:** 2026-07-15  
+**Purpose:** Hierarchical map of all application screens and navigation paths  
+
+---
+
+## 1. Dashboard
+- **Home / Overview**
+  - Today’s Sales
+  - Today’s Purchase
+  - Cash In Hand
+  - Due Collection (Today)
+  - Due Payment (Today)
+  - Profit Today
+  - Profit This Month
+  - Stock Value
+  - Top Selling Products
+  - Low Stock Alert
+  - Expiring Products
+  - Expired Products
+  - Recent Transactions
+  - Sales Graph
+  - Purchase Graph
+  - Income vs Expense Graph
+  - Date Filter (Today, Yesterday, Last 7 Days, Last 30 Days, Custom)
+
+---
+
+## 2. Sales (বিক্রয়)
+- **POS Sale** – Main point-of-sale screen
+- **Quick Sale** – Streamlined sale with minimal steps
+- **Wholesale Sale** – Bulk sale with wholesale pricing
+- **Retail Sale** – Standard retail transaction
+- **Sales History** – List and search past sales
+  - Sale Detail (items, payments, batches used)
+  - Invoice Print / Reprint
+  - Receive Payment (due collection)
+  - Cancel / Void Invoice
+- **Draft Invoices** – Unfinished sales
+- **Hold Sale** – Suspended transactions
+- **Quotations / Estimates** – Create and manage quotes
+  - Convert Quotation to Sale
+- **Delivery Notes** – Manage deliveries against sales
+  - Update Delivery Status
+- **Sales Return** – Process customer returns
+- **Exchange** – Product exchange workflow
+- **Installment Sales** – Sales with installment plans
+  - Installment Schedule
+- **Credit Sale Management** – Manage credit sales and limits
+- **Receive Payment** – Standalone due collection
+
+---
+
+## 3. Purchase (ক্রয়)
+- **New Purchase** – Record goods received
+- **Purchase History** – List and search past purchases
+  - Purchase Detail (items, payments, batches received)
+- **Purchase Orders** – Create and manage POs
+  - Convert PO to Purchase Invoice
+- **Pending Purchase** – Orders not yet received
+- **Import Purchase** – Bulk import via Excel
+- **Purchase Return** – Return goods to supplier
+- **Supplier Payment** – Record payments to suppliers
+- **Supplier Invoice** – Direct entry of supplier bills
+
+---
+
+## 4. Products (পণ্য)
+- **Product List** – Master list with search, filter, and bulk actions
+  - Add / Edit Product
+- **Categories** – Manage product categories
+- **Sub Categories** – Manage sub-categories
+- **Brands** – Manage brands
+- **Generic Name** – (Pharmacy) generic medicine names
+- **Manufacturer** – (Pharmacy) manufacturers list
+- **Batch Number** – Manage batch tracking settings
+- **Barcode** – Generate and assign barcodes
+- **QR Code** – Generate product QR codes
+- **Warranty** – Manage product warranties
+- **Unit** – Units of measurement
+- **Color** – Product colors (clothing)
+- **Size** – Product sizes (clothing)
+- **Variant** – Product variants (size, color, etc.)
+- **Serial Number** – Track individual serial numbers
+- **Product Images** – Manage product gallery
+- **Product Notes** – Internal notes
+
+---
+
+## 5. Inventory (মজুদ / স্টক)
+- **Current Stock** – Real-time stock overview
+  - Filter by warehouse, category, batch
+- **Low Stock** – Items below reorder level
+- **Out of Stock** – Zero quantity items
+- **Damaged Product** – View and manage damaged goods
+- **Lost Product** – Record lost inventory
+- **Expiring Product** – Batches nearing expiry
+- **Expired Product** – Expired batches
+- **Batch Wise Stock** – Stock grouped by batch number
+- **Warehouse Stock** – Stock per warehouse/branch
+- **Stock Adjustment** – Manual stock corrections
+- **Stock Transfer** – Transfer stock between warehouses
+- **Barcode Label Print** – Print product/batch barcode stickers
+- **Inventory History** – Audit trail of all stock movements
+
+---
+
+## 6. Customers (ক্রেতা)
+- **Customer List** – Search, filter, add customers
+  - Customer Detail (profile, transactions, due)
+- **Customer Groups** – Segment customers (retail, wholesale, VIP)
+- **Customer Due** – Report of outstanding customer balances
+- **Customer Ledger** – Individual account statement
+- **Loyalty Points** – Manage loyalty programme and redemption
+- **Membership** – Membership tiers and benefits
+
+---
+
+## 7. Suppliers (সরবরাহকারী)
+- **Supplier List** – Search, filter, add suppliers
+  - Supplier Detail (profile, transactions, due)
+- **Supplier Due** – Report of outstanding supplier balances
+- **Supplier Ledger** – Individual account statement
+- **Supplier Statement** – Periodic statement of account
+
+---
+
+## 8. Accounting (হিসাব)
+- **Cash Book** – Daily cash transactions
+- **Bank** – Bank accounts and transactions
+- **Mobile Banking** – bKash, Nagad, etc.
+- **Fund Transfer** – Transfer between accounts
+- **Chart of Accounts** – Manage account heads
+- **Journal Entry** – Manual journal entries
+  - New Journal Entry
+  - Journal History
+- **Ledger** – General ledger for any account
+- **Trial Balance** – Trial balance report
+- **Balance Sheet** – Financial position statement
+- **Profit & Loss** – Income statement
+- **Cash Flow** – Cash flow statement
+- **Opening Balance** – Set initial balances
+- **Expense** – Record and categorise expenses
+  - Expense Categories
+  - Expense Approval (if workflow enabled)
+- **Income** – Other income (non-sales)
+  - Commission
+  - Service Charge
+  - Miscellaneous Income
+
+---
+
+## 9. Pharmacy (ঔষধ ব্যবসা) *(shown if business type = Pharmacy)*
+- **Medicine Database** – Master list of medicines
+- **Generic** – Generic drug names
+- **Strength** – Drug strengths
+- **Dosage** – Dosage forms
+- **Manufacturer** – Pharmaceutical manufacturers
+- **Batch** – Batch tracking for medicines
+- **Expiry** – Expiry date management
+- **Prescription Sale** – Sale with prescription validation
+- **Schedule Medicine** – Controlled/H‑schedule drugs
+- **Medicine Reminder** – Alerts for stock/expiry
+- **Prescription** – Record and manage prescriptions
+  - Upload Prescription (image)
+  - Prescription History
+- **Doctor List** – Referring doctors
+- **Patient List** – Patients with prescription history
+- **Prescription Print** – Print prescription labels
+
+---
+
+## 10. Education / Academy *(shown if business type = Academy)*
+- **Courses** – List of courses (linked to service products)
+- **Academic Batches** – Manage course batches
+  - Batch Detail (students, attendance, exams)
+- **Enrollments** – Enroll students into batches
+  - Enrollment Detail (fee schedule, status)
+- **Student Attendance** – Daily attendance marking
+  - Attendance Sheet per Batch
+  - Attendance Reports
+- **Exams & Results** – Record exam marks and grades
+- **Student Secrets** – Manage portal passwords
+- **Student Portal QR** – Generate public QR for self‑service
+- **Digital Student ID** – Generate personal QR codes for students
+- **Fee Collection** – Fee payment recording (integrated with Sales)
+- **Student 360° Profile** – Complete student view (fees, attendance, results, enrollment history)
+- **Certificate Print** – Generate and print course certificates
+
+---
+
+## 11. Employees (কর্মচারী) *(optional module)*
+- **Employee List** – Staff directory
+  - Employee Detail (salary, attendance, commission)
+- **Attendance** – Employee check‑in/check‑out
+- **Salary** – Salary structure and payments
+- **Payroll** – Monthly payroll processing
+- **Commission** – Sales commission tracking
+- **Roles** – Assign roles to employees (linked to user roles)
+
+---
+
+## 12. Reports (রিপোর্ট)
+- **Sales Report** – Detailed sales analytics
+- **Purchase Report** – Purchase analysis
+- **Profit Report** – Profitability by product, category, branch
+- **Expense Report** – Expense breakdown
+- **Income Report** – Income sources
+- **Stock Report** – Stock valuation and movement
+- **Customer Report** – Customer sales and due
+- **Supplier Report** – Supplier purchases and due
+- **Tax Report** – Tax collected/paid
+- **VAT Report** – VAT returns
+- **Cash Report** – Cash flow summary
+- **Ledger Report** – Account‑wise ledger
+- **Daily / Monthly / Yearly Reports** – Pre‑aggregated summaries
+- **Export** – PDF, Excel, CSV
+
+---
+
+## 13. SMS & Notifications
+- **SMS**
+  - Purchase SMS
+  - Sales SMS
+  - Due Reminder SMS
+  - Birthday SMS
+  - Promotional SMS
+  - SMS History
+- **Notifications**
+  - Stock Alert
+  - Due Alert
+  - Expiry Alert
+  - Backup Alert
+  - Subscription Alert
+  - In‑App Notification Centre
+
+---
+
+## 14. Backup & Data
+- **Backup**
+  - Auto Backup Settings
+  - Manual Backup (Local, Google Drive, Telegram)
+  - Backup History
+- **Restore**
+  - Restore from Local File
+  - Restore from Google Drive
+  - Restore from Telegram
+- **Import**
+  - Import Products (Excel)
+  - Import Customers
+  - Import Suppliers
+  - Import Stock
+- **Export**
+  - Export Excel
+  - Export PDF
+  - Export Google Sheets (auto‑sync)
+
+---
+
+## 15. eCommerce & Online Store *(optional)*
+- **Online Store Settings**
+- **Website & Domain**
+- **Hosting**
+- **Online Orders** – Manage orders from the web store
+- **Delivery Charge** – Configure delivery fees
+- **Coupon** – Manage discount coupons
+- **Payment Gateway** – Configure online payments
+- **Inventory Sync** – Sync stock between online and offline
+
+---
+
+## 16. Multi Business / Branch
+- **Business List** – All businesses under one account
+- **Switch Business** – Switch active business
+- **Business Profile** – Edit business details (per business)
+
+---
+
+## 17. Settings (সেটিংস)
+- **Business Profile** – Name, address, logo, type
+- **Invoice Design** – Customise invoice templates
+- **Printer Setup** – Add and configure printers
+- **Barcode Setup** – Barcode generation settings
+- **Tax Setup** – Tax rates and rules
+- **VAT Setup** – VAT configuration
+- **Currency** – Default currency
+- **Language** – UI language (বাংলা / English)
+- **Theme** – Colour theme
+- **User Settings** – Manage users and roles
+- **Security** – Database encryption, login history, device management
+- **Subscription** – Plan information (Free / Premium / Enterprise)
+- **Local Server** – Server status, port, IP
+- **Cloud Sync** – Cloud sync connection settings
+
+---
+
+## 18. Help & Support
+- **User Guide** – In‑app manual
+- **Video Tutorial** – Embedded training videos
+- **FAQ** – Frequently asked questions
+- **Contact Support** – Email / chat support
+- **Live Chat** – Real‑time support (if available)
+- **System Health** – Server health, disk space, database integrity
+- **View Logs** – Application logs
+- **Generate Support Report** – Bundle diagnostics for support
+
+---
+
+## 19. Amar AI (Future / Premium)
+- **Smart Sales Forecast**
+- **Low Stock Prediction**
+- **Expiry Prediction**
+- **Profit Analysis**
+- **Business Health Score**
+- **AI Chat Assistant**
+- **Smart Product Search**
+- **Voice Invoice**
+- **OCR Invoice Scan**
+- **AI Insights Dashboard**
+
+---
+
+## 20. Future Enterprise Modules (v2.0)
+- **CRM** – Advanced customer relationship management
+- **HRM** – Human resource management
+- **Payroll** – Comprehensive payroll
+- **Warehouse Management** – Advanced WMS
+- **Multi Branch** – Enhanced multi‑branch capabilities
+- **Franchise Management**
+- **Manufacturing** – Production management
+- **Hospital Integration**
+- **Diagnostic Integration**
+- **Accounting ERP** – Full enterprise accounting
+- **API Center** – Developer API and webhooks
+- **WhatsApp Business Integration**
+- **Telegram Bot** – Customer interaction bot
+- **Customer Mobile App** – Dedicated customer self‑service app
+- **Supplier Portal** – Supplier self‑service portal
+- **Delivery Rider App** – Dedicated delivery app
+- **Admin Web Panel** – Web‑based admin console
+- **Owner Dashboard** – Executive dashboard
+- **AI Business Copilot** – Advanced AI assistant
+
+---
+
+*This sitemap reflects the complete navigation and feature set of Amar Hisab. Screens are conditionally displayed based on business type and subscription plan.*

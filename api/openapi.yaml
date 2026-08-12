@@ -1,0 +1,1060 @@
+openapi: 3.0.3
+info:
+  title: Amar Hisab – Local Server API
+  description: |
+    The Amar Hisab local server is a Shelf-based REST API that powers the
+    desktop / mobile POS front-ends, plus the optional cloud sync integration.
+    All mutating endpoints require a valid JWT issued via `/api/v1/auth/login`
+    unless marked as public.
+  version: 1.0.0
+  contact:
+    name: Amar Hisab Support
+    email: support@amarhisab.com
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://hisab.example.com
+    description: Production (proxied through nginx)
+
+tags:
+  - name: auth
+    description: Authentication & current user
+  - name: setup
+    description: First-run setup wizard (no auth required)
+  - name: users
+    description: User management
+  - name: products
+    description: Catalog (categories, brands, units, products)
+  - name: inventory
+    description: Warehouses, stock, batches and adjustments
+  - name: sales
+    description: Sales lifecycle, returns and payments
+  - name: purchases
+    description: Purchase orders, suppliers and payments
+  - name: accounting
+    description: Chart of accounts, journals, ledger
+  - name: reports
+    description: Reporting and exports (Excel / PDF)
+  - name: sync
+    description: Cloud-sync status and triggers
+  - name: portal
+    description: Public student / customer self-service
+
+paths:
+  /health:
+    get:
+      summary: Liveness probe
+      operationId: healthCheck
+      tags: [setup]
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      operationId: metrics
+      tags: [setup]
+      responses:
+        '200':
+          description: Metrics in Prometheus text exposition format
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/docs:
+    get:
+      summary: Swagger UI for this API
+      tags: [setup]
+      responses:
+        '200':
+          description: HTML documentation page
+          content:
+            text/html:
+              schema: { type: string }
+
+  /api/openapi.yaml:
+    get:
+      summary: This OpenAPI document
+      tags: [setup]
+      responses:
+        '200':
+          description: The OpenAPI 3.0 spec
+          content:
+            application/yaml:
+              schema: { type: string }
+
+  # ---------------------------------------------------------------- setup
+  /setup/status:
+    get:
+      summary: Report whether first-run setup has been completed
+      tags: [setup]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+
+  /setup/initialize:
+    post:
+      summary: Create the business + owner in one step (first-run only)
+      tags: [setup]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [businessName, ownerUsername, ownerPassword, ownerFullName]
+              properties:
+                businessName: { type: string }
+                businessType: { type: string, default: retail }
+                currency: { type: string, default: BDT }
+                taxDefault: { type: number, default: 0 }
+                ownerUsername: { type: string }
+                ownerPassword: { type: string, format: password, minLength: 8 }
+                ownerFullName: { type: string }
+      responses:
+        '201':
+          description: Business created; JWT for the Owner returned in `token`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '409':
+          description: Setup already completed
+
+  # ---------------------------------------------------------------- auth
+  /api/v1/auth/login:
+    post:
+      summary: Log in
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/auth/me:
+    get:
+      summary: Current user with permissions
+      tags: [auth]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Current user + permission list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+
+  # ---------------------------------------------------------------- users
+  /api/v1/users:
+    get:
+      summary: List users
+      tags: [users]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/PageParam' }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+    post:
+      summary: Create user
+      tags: [users]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserInput' }
+      responses:
+        '201':
+          $ref: '#/components/responses/CreatedEnvelope'
+
+  /api/v1/users/{id}:
+    get:
+      summary: Get user
+      tags: [users]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+    put:
+      summary: Update user
+      tags: [users]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserInput' }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+    delete:
+      summary: Delete or deactivate user
+      tags: [users]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+
+  # ---------------------------------------------------------------- products
+  /api/v1/categories:
+    get:
+      summary: List categories
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    post:
+      summary: Create category
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryInput' }
+      responses:
+        '201': { $ref: '#/components/responses/CreatedEnvelope' }
+  /api/v1/categories/{id}:
+    get:
+      summary: Get category
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    put:
+      summary: Update category
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoryInput' }
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    delete:
+      summary: Delete category
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+  /api/v1/brands:
+    get:
+      summary: List brands
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    post:
+      summary: Create brand
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandInput' }
+      responses:
+        '201': { $ref: '#/components/responses/CreatedEnvelope' }
+  /api/v1/brands/{id}:
+    get:
+      summary: Get brand
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    put:
+      summary: Update brand
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandInput' }
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    delete:
+      summary: Delete brand
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+  /api/v1/units:
+    get:
+      summary: List units
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    post:
+      summary: Create unit
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UnitInput' }
+      responses:
+        '201': { $ref: '#/components/responses/CreatedEnvelope' }
+  /api/v1/units/{id}:
+    get:
+      summary: Get unit
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    put:
+      summary: Update unit
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UnitInput' }
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    delete:
+      summary: Delete unit
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+  /api/v1/products:
+    get:
+      summary: List products
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    post:
+      summary: Create product
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductInput' }
+      responses:
+        '201': { $ref: '#/components/responses/CreatedEnvelope' }
+  /api/v1/products/{id}:
+    get:
+      summary: Get product
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    put:
+      summary: Update product
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductInput' }
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    delete:
+      summary: Delete product
+      tags: [products]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+  /api/v1/products/search/{query}:
+    get:
+      summary: Search products
+      tags: [products]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: query
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+
+  # ---------------------------------------------------------------- inventory
+  /api/v1/warehouses:
+    get:
+      summary: List warehouses
+      tags: [inventory]
+      security: [ { bearerAuth: [] } ]
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    post:
+      summary: Create warehouse
+      tags: [inventory]
+      security: [ { bearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WarehouseInput' }
+      responses:
+        '201': { $ref: '#/components/responses/CreatedEnvelope' }
+  /api/v1/warehouses/{id}:
+    get:
+      summary: Get warehouse
+      tags: [inventory]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    put:
+      summary: Update warehouse
+      tags: [inventory]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WarehouseInput' }
+      responses:
+        '200': { $ref: '#/components/responses/SuccessEnvelope' }
+    delete:
+      summary: Delete warehouse
+      tags: [inventory]
+      security: [ { bearerAuth: [] } ]
+      parameters: [ { $ref: '#/components/parameters/IdParam' } ]
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+
+  /api/v1/inventory/product/{productId}:
+    get:
+      summary: Stock levels for one product across warehouses
+      tags: [inventory]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+
+  /api/v1/inventory/warehouse/{warehouseId}:
+    get:
+      summary: Stock levels in one warehouse
+      tags: [inventory]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: warehouseId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+
+  /api/v1/inventory/batches/{productId}:
+    get:
+      summary: Batches for one product
+      tags: [inventory]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+
+  /api/v1/inventory/movements/{productId}:
+    get:
+      summary: Stock movements for one product
+      tags: [inventory]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+
+  /api/v1/inventory/add:
+    post:
+      summary: Add stock (manual top-up)
+      tags: [inventory]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '201':
+          $ref: '#/components/responses/CreatedEnvelope'
+  /api/v1/inventory/deduct:
+    post:
+      summary: Deduct stock
+      tags: [inventory]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '201':
+          $ref: '#/components/responses/CreatedEnvelope'
+  /api/v1/inventory/transfer:
+    post:
+      summary: Transfer stock between warehouses
+      tags: [inventory]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '201':
+          $ref: '#/components/responses/CreatedEnvelope'
+  /api/v1/inventory/adjust:
+    post:
+      summary: Adjust stock (physical count)
+      tags: [inventory]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '201':
+          $ref: '#/components/responses/CreatedEnvelope'
+
+  # ---------------------------------------------------------------- sales
+  /api/v1/sales:
+    get:
+      summary: List sales
+      tags: [sales]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+    post:
+      summary: Create sale
+      tags: [sales]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SaleInput' }
+      responses:
+        '201':
+          $ref: '#/components/responses/CreatedEnvelope'
+  /api/v1/sales/{id}:
+    get:
+      summary: Sale detail
+      tags: [sales]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+    put:
+      summary: Update draft sale
+      tags: [sales]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+    delete:
+      summary: Void sale
+      tags: [sales]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+  /api/v1/sales/{id}/return:
+    post:
+      summary: Process a return
+      tags: [sales]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '201':
+          $ref: '#/components/responses/CreatedEnvelope'
+  /api/v1/sales/{id}/payments:
+    post:
+      summary: Receive payment for a sale
+      tags: [sales]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '201':
+          $ref: '#/components/responses/CreatedEnvelope'
+
+  # ---------------------------------------------------------------- purchases
+  /api/v1/purchases:
+    get:
+      summary: List purchases
+      tags: [purchases]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+    post:
+      summary: Create purchase
+      tags: [purchases]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '201':
+          $ref: '#/components/responses/CreatedEnvelope'
+  /api/v1/purchases/{id}:
+    get:
+      summary: Purchase detail
+      tags: [purchases]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+    put:
+      summary: Update purchase (draft only)
+      tags: [purchases]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+    delete:
+      summary: Void purchase
+      tags: [purchases]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '204':
+          $ref: '#/components/responses/NoContent'
+
+  # ---------------------------------------------------------------- accounting
+  /api/v1/accounting/accounts:
+    get:
+      summary: List accounts (Chart of Accounts)
+      tags: [accounting]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+    post:
+      summary: Create account
+      tags: [accounting]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '201':
+          $ref: '#/components/responses/CreatedEnvelope'
+  /api/v1/accounting/accounts/{id}:
+    get:
+      summary: Account detail
+      tags: [accounting]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+
+  /api/v1/accounting/journal:
+    get:
+      summary: Journal entries
+      tags: [accounting]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+    post:
+      summary: Create journal entry
+      tags: [accounting]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '201':
+          $ref: '#/components/responses/CreatedEnvelope'
+  /api/v1/accounting/journal/{id}:
+    get:
+      summary: Single journal entry
+      tags: [accounting]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+  /api/v1/accounting/journal/{id}/post:
+    post:
+      summary: Mark journal entry POSTED
+      tags: [accounting]
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdParam' }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+
+  /api/v1/accounting/trial-balance:
+    get:
+      summary: Trial Balance report
+      tags: [accounting]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+  /api/v1/accounting/profit-loss:
+    get:
+      summary: Profit & Loss report
+      tags: [accounting]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+  /api/v1/accounting/balance-sheet:
+    get:
+      summary: Balance Sheet report
+      tags: [accounting]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+  /api/v1/accounting/ledger/{accountId}:
+    get:
+      summary: Ledger for a single account
+      tags: [accounting]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+
+  # ---------------------------------------------------------------- reports
+  /api/v1/reports/sales:
+    get:
+      summary: Sales report
+      tags: [reports]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+  /api/v1/reports/purchases:
+    get:
+      summary: Purchases report
+      tags: [reports]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+  /api/v1/reports/inventory:
+    get:
+      summary: Inventory report
+      tags: [reports]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+  /api/v1/reports/financial:
+    get:
+      summary: Financial report
+      tags: [reports]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+  /api/v1/reports/{kind}/export:
+    get:
+      summary: Export a report
+      tags: [reports]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: kind
+          in: path
+          required: true
+          schema: { type: string, enum: [sales, purchases, inventory, financial] }
+        - name: format
+          in: query
+          required: true
+          schema: { type: string, enum: [xlsx, pdf] }
+      responses:
+        '200':
+          description: Binary export
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  # ---------------------------------------------------------------- sync
+  /api/v1/sync/status:
+    get:
+      summary: Sync engine status
+      tags: [sync]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+  /api/v1/sync/run:
+    post:
+      summary: Trigger an immediate sync
+      tags: [sync]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '202':
+          $ref: '#/components/responses/CreatedEnvelope'
+
+  # ---------------------------------------------------------------- public portal
+  /public/portal/{token}/students:
+    get:
+      summary: List students accessibly via a portal token
+      tags: [portal]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+  /public/portal/{token}/login:
+    post:
+      summary: Authenticate a student against the portal
+      tags: [portal]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+  /public/portal/me:
+    get:
+      summary: Authenticated student self-service
+      tags: [portal]
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+  /public/qr/{token}/profile:
+    get:
+      summary: Public QR profile
+      tags: [portal]
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          $ref: '#/components/responses/SuccessEnvelope'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+    PageParam:
+      name: page
+      in: query
+      schema: { type: integer, default: 1 }
+
+  responses:
+    SuccessEnvelope:
+      description: Successful response wrapped in the standard envelope
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Envelope'
+    CreatedEnvelope:
+      description: Resource created (envelope)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Envelope'
+    NoContent:
+      description: No body
+
+    Unauthorized:
+      description: JWT missing or invalid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            status: { type: string, example: "ok" }
+            service: { type: string, example: "amar_hisab" }
+            version: { type: string, example: "1.0.0" }
+            timestamp: { type: string, format: date-time }
+
+    Envelope:
+      type: object
+      properties:
+        ok: { type: boolean, example: true }
+        data: { type: object }
+        meta: { type: object }
+
+    ErrorEnvelope:
+      type: object
+      properties:
+        ok: { type: boolean, example: false }
+        error: { type: string }
+        message: { type: string }
+
+    LoginResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                token: { type: string }
+                user: { $ref: '#/components/schemas/User' }
+                permissions:
+                  type: array
+                  items: { type: string }
+
+    MeResponse:
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                user: { $ref: '#/components/schemas/User' }
+                permissions:
+                  type: array
+                  items: { type: string }
+
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        username: { type: string }
+        fullName: { type: string }
+        roleId: { type: integer }
+        isActive: { type: boolean }
+
+    UserInput:
+      type: object
+      required: [username, fullName, roleId]
+      properties:
+        username: { type: string }
+        fullName: { type: string }
+        roleId: { type: integer }
+        password: { type: string, format: password }
+
+    SaleInput:
+      type: object
+      required: [items, payments]
+      properties:
+        customerId: { type: integer, nullable: true }
+        items:
+          type: array
+          items:
+            type: object
+            required: [productId, quantity, unitPrice]
+            properties:
+              productId: { type: integer }
+              quantity: { type: number }
+              unitPrice: { type: number }
+              batchId: { type: integer, nullable: true }
+        payments:
+          type: array
+          items:
+            type: object
+            required: [method, amount]
+            properties:
+              method: { type: string, enum: [cash, bkash, card, credit] }
+              amount: { type: number }
+        note: { type: string, nullable: true }
+        applyDiscount: { type: boolean, nullable: true }
+        discountAmount: { type: number, nullable: true }
+
+    CategoryInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        parentId: { type: integer, nullable: true }
+        description: { type: string, nullable: true }
+
+    BrandInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string, nullable: true }
+
+    UnitInput:
+      type: object
+      required: [name, abbreviation]
+      properties:
+        name: { type: string }
+        abbreviation: { type: string }
+
+    ProductInput:
+      type: object
+      required: [name, categoryId, unitId, sellingPrice]
+      properties:
+        name: { type: string }
+        sku: { type: string, nullable: true }
+        barcode: { type: string, nullable: true }
+        categoryId: { type: integer }
+        brandId: { type: integer, nullable: true }
+        unitId: { type: integer }
+        sellingPrice: { type: number }
+        costPrice: { type: number, nullable: true }
+        batchTracked: { type: boolean, default: false }
+        isActive: { type: boolean, default: true }
+
+    WarehouseInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        location: { type: string, nullable: true }
+        isActive: { type: boolean, default: true }
