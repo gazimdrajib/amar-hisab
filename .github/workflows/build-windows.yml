@@ -17,15 +17,29 @@ jobs:
         with:
           channel: stable
 
+      - name: Flutter Doctor (debug)
+        run: flutter doctor -v
+
+      - name: Enable Windows Desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: List project files (debug)
+        run: dir flutter_app
+
       - name: Install dependencies
-        run: |
-          cd flutter_app
-          flutter pub get
+        working-directory: flutter_app
+        run: flutter pub get
+
+      - name: Analyze code (check for errors)
+        working-directory: flutter_app
+        run: flutter analyze
 
       - name: Build Windows EXE
-        run: |
-          cd flutter_app
-          flutter build windows --release
+        working-directory: flutter_app
+        run: flutter build windows --release
+
+      - name: List build output (debug)
+        run: dir flutter_app\build\windows\runner\Release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
