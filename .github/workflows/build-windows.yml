@@ -1,6 +1,8 @@
 name: Build Windows EXE
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -14,6 +16,13 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+
+      - name: Enable Windows Desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Create Windows platform files (if missing)
+        working-directory: flutter_app
+        run: flutter create --platforms=windows .
 
       - name: Install dependencies
         working-directory: flutter_app
