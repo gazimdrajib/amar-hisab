@@ -20,20 +20,42 @@ jobs:
       - name: Enable Windows Desktop
         run: flutter config --enable-windows-desktop
 
-      - name: Create Windows platform files (if missing)
+      - name: Create Windows platform files
         working-directory: flutter_app
         run: flutter create --platforms=windows .
+
+      - name: List flutter_app folder (debug)
+        working-directory: flutter_app
+        run: dir /b
+
+      - name: List windows folder (debug)
+        working-directory: flutter_app
+        run: dir /b windows || echo "windows folder missing"
 
       - name: Install dependencies
         working-directory: flutter_app
         run: flutter pub get
 
-      - name: Build Windows EXE
+      - name: Build Windows EXE (verbose)
         working-directory: flutter_app
-        run: flutter build windows --release
+        run: flutter build windows --release --verbose
+
+      - name: List build output (debug)
+        working-directory: flutter_app
+        run: |
+          if exist "build\windows\runner\Release" (
+            dir /b "build\windows\runner\Release"
+          ) else (
+            echo "Release folder not found"
+            echo "Searching for .exe files:"
+            dir /s *.exe || echo "No exe files found"
+          )
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: amar-hisab-windows
-          path: flutter_app/build/windows/runner/Release/
+          path: |
+            flutter_app/build/windows/runner/Release/amar_hisab.exe
+            flutter_app/build/windows/runner/Release/*.dll
+          if-no-files-found: warn
