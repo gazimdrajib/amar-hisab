@@ -1,8 +1,6 @@
 name: Build Windows EXE
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
@@ -17,28 +15,13 @@ jobs:
         with:
           channel: stable
 
-      - name: Enable Windows Desktop
-        run: flutter config --enable-windows-desktop
-
-      - name: Check if windows folder exists
-        working-directory: flutter_app
-        run: dir windows || echo "No windows folder yet"
-
-      - name: Create Windows platform files if missing
-        working-directory: flutter_app
-        run: flutter create --platforms=windows .
-
       - name: Install dependencies
         working-directory: flutter_app
         run: flutter pub get
 
-      - name: Build Windows EXE (verbose)
+      - name: Build Windows EXE
         working-directory: flutter_app
-        run: flutter build windows --release --verbose
-
-      - name: List build output
-        working-directory: flutter_app
-        run: dir build\windows\runner\Release || echo "Build folder not found"
+        run: flutter build windows --release
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
